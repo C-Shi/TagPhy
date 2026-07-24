@@ -1,0 +1,39 @@
+---
+description: High-level overview of the project, tech stack, and core goals
+globs: "*"
+alwaysApply: true
+---
+
+# Project Overview
+
+The application is a standalone, portable desktop photo cataloger and intelligence engine designed to run directly from a USB drive without requiring installation, administrative privileges, or host PC system modifications.
+
+Instead of relying on remote servers, it operates as an autonomous multi-agent platform that scans unorganized media collections, parses metadata, performs zero-shot visual tagging, builds a searchable database, re-structures physical files on disk, and provides a desktop GUI for browsing and real-time human correction.
+
+## Tech Stack
+
+- _Agent Framework & Orchestration_: Google Agent Development Kit (ADK) using multi-agent delegation, custom `FunctionTool` implementations, session state management, and workflow routing.
+- _Vision & Machine Learning Engine_:
+  - Online: Gemini 3.X API for high-accuracy multimodal visual understanding
+  - Offline: Proper localized image recognization and gen AI model
+- _Database & Storage_: SQLite using relative file pathing, junction tables for multi-tag assignment, BLOB vector storage, and recursive Common Table Expressions (CTEs) for hierarchical tag tree resolution.
+- _Metadata & Geocoding_: Propor tool for extracting and understanding picture's raw metadata, such as timestamp and location, device
+- _User Interface_: A GUI is able to run without installation, and with single click that can run in both windows and MacOS, preferrably also linux
+
+## Key Features
+
+1. Zero-Install USB Portability: Runs off any arbitrary host computer, automatically resolving relative paths. The app will only scan the use driver it sit under
+2. Dual-Inference Engine (Online/Offline Switch): Dynamically probes for internet connectivity and an API key. Uses cloud-based Gemini 2.5 API when online, and seamlessly falls back to the embedded local ONNX vision model on host CPUs when offline.
+3. Multi-Agent Delegation Architecture
+   - Metadata Agent: Extracts EXIF dates and converts GPS coordinates to cities/countries.
+   - Vision & Entity Agent: Executes feature vector matching and image analysis.
+   - Storage & DB Agent: Manages database transactions and performs safe relative file moves on the drive.
+4. Few-Shot Entity Recognition (No Fine-Tuning): Recognizes specific subjects (e.g., individual pets like Meowy and Jelly) by averaging 512-float vector embeddings from sample photos and performing cosine similarity checks at run-time—without retraining neural network weights.
+5. Hierarchical Directed Tag Tree (DAG): Stores tags in a parent-child graph (e.g., Meowy $\rightarrow$ Cat $\rightarrow$ Pet $\rightarrow$ Animal). Searching for top-level tags like Cat automatically retrieves all descendant child images via recursive database queries.
+6. Automated Tag Normalization & Discovery: Discovers new visual elements in unmapped photos while applying string cleaning, lowercasing, and fuzzy matching (Levenshtein distance) to prevent tag duplication (dogs $\rightarrow$ dog).
+7. Interactive Preview Gallery UI: Provides a lazy-loaded desktop thumbnail browser with side-by-side metadata, an interactive category tree filter, and confidence score displays.
+8. Real-Time Human-in-the-Loop Correction & Vector Recalibration: Allows users to override misclassified tags on the spot, instantly updating SQLite and relocating the physical file if needed. When a user confirms or fixes an entity label, the app automatically updates the stored entity reference vector to improve future scanning accuracy.
+
+## Final Rule
+
+1. This project-info is initial design. It should act as a reference, but is allowed to be challenge anytime should have discuss with user
