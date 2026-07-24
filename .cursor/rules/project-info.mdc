@@ -6,34 +6,73 @@ alwaysApply: true
 
 # Project Overview
 
-The application is a standalone, portable desktop photo cataloger and intelligence engine designed to run directly from a USB drive without requiring installation, administrative privileges, or host PC system modifications.
+TagPhy is a standalone, portable photo cataloger and intelligence engine designed to run from a USB drive without requiring installation, administrative privileges, or host PC system modifications.
 
-Instead of relying on remote servers, it operates as an autonomous multi-agent platform that scans unorganized media collections, parses metadata, performs zero-shot visual tagging, builds a searchable database, re-structures physical files on disk, and provides a desktop GUI for browsing and real-time human correction.
+It operates as an autonomous multi-agent platform (Google ADK is a hard requirement) that scans unorganized media on the drive, parses metadata, performs visual tagging, builds a searchable SQLite database, moves tagged files into a year-based folder layout, and provides a GUI for browsing and real-time human correction.
+
+End users download a runnable binary from releases (not a git clone). Source stays in GitHub for development. Packaging and windowed distribution come after the core scan → tag → move → preview loop works.
 
 ## Tech Stack
 
-- _Agent Framework & Orchestration_: Google Agent Development Kit (ADK) using multi-agent delegation, custom `FunctionTool` implementations, session state management, and workflow routing.
+- _Agent Framework & Orchestration_: Google Agent Development Kit (ADK) — hard requirement for learning. Multi-agent delegation, custom `FunctionTool` implementations, session state management, and workflow routing.
 - _Vision & Machine Learning Engine_:
-  - Online: Gemini 3.X API for high-accuracy multimodal visual understanding
-  - Offline: Proper localized image recognization and gen AI model
+  - Online: Gemini API for high-accuracy multimodal visual understanding (probe connectivity + API key)
+  - Offline: Embedded local ONNX vision model on host CPU when offline; USB assumed to have enough space (8GB+; typically much larger)
 - _Database & Storage_: SQLite using relative file pathing, junction tables for multi-tag assignment, BLOB vector storage, and recursive Common Table Expressions (CTEs) for hierarchical tag tree resolution.
-- _Metadata & Geocoding_: Propor tool for extracting and understanding picture's raw metadata, such as timestamp and location, device
-- _User Interface_: A GUI is able to run without installation, and with single click that can run in both windows and MacOS, preferrably also linux
+- _Metadata & Geocoding_: EXIF extraction for timestamp, device, and GPS. City/country geocoding is online-capable when available; MVP may store GPS only and defer place names (offline USB hosts cannot rely on remote geocoders).
+- _User Interface_:
+  - Early: local web server (e.g. FastAPI/Flask) + browser UI — preferred learning path given web-server familiarity
+  - Product: same UI wrapped in a native window (Tauri or Electron) so non-technical users double-click an app and get a window — no terminal or clone required
+  - Targets: Windows and macOS; Linux preferred if feasible
+- _Distribution (last)_: Bundle backend (e.g. PyInstaller/Nuitka) + window shell; ship platform artifacts via GitHub Releases. Do not bake API secrets into the binary.
+
+## Scan, Move, and Preview Flow
+
+1. User clicks **Scan**.
+2. App scans media on the drive it sits under, **excluding** anything already under `Photo_Tagged/`.
+3. ADK agents enrich metadata and produce tags.
+4. On success, the file is **physically moved** to `Photo_Tagged/<year>/` (year from EXIF taken-at; define a fallback such as `Photo_Tagged/Unknown/` when date is missing).
+5. **Only after a successful move**, SQLite is updated with the **new relative path** (and tags). Preview in the GUI always uses the DB path.
+6. If the move fails, do not update the path in the DB; surface the error. Prefer move + DB update as one logical transaction (retry DB update or move-back on DB failure after a successful move).
+
+Example layout on the USB:
+
+```
+USB/
+├── TagPhy (app)
+├── (unsorted photos elsewhere on the drive)
+└── Photo_Tagged/
+    ├── 2024/
+    ├── 2025/
+    └── 2026/
+```
 
 ## Key Features
 
-1. Zero-Install USB Portability: Runs off any arbitrary host computer, automatically resolving relative paths. The app will only scan the use driver it sit under
-2. Dual-Inference Engine (Online/Offline Switch): Dynamically probes for internet connectivity and an API key. Uses cloud-based Gemini 2.5 API when online, and seamlessly falls back to the embedded local ONNX vision model on host CPUs when offline.
-3. Multi-Agent Delegation Architecture
-   - Metadata Agent: Extracts EXIF dates and converts GPS coordinates to cities/countries.
-   - Vision & Entity Agent: Executes feature vector matching and image analysis.
-   - Storage & DB Agent: Manages database transactions and performs safe relative file moves on the drive.
+1. Zero-Install USB Portability: Runs off an arbitrary host computer with relative paths. Scans only the drive the app sits under; never requires users to clone the repository.
+2. Dual-Inference Engine (Online/Offline Switch): Dynamically probes for internet connectivity and an API key. Uses cloud Gemini when online; falls back to embedded local ONNX on host CPUs when offline.
+3. Multi-Agent Delegation Architecture (ADK):
+   - Metadata Agent: Extracts EXIF dates (required for year folders), device, and GPS; optional online city/country when policy allows.
+   - Vision & Entity Agent: Image analysis, tagging, and feature vector matching.
+   - Storage & DB Agent: Performs safe relative file moves, then database updates with the new path; manages transactions.
 4. Few-Shot Entity Recognition (No Fine-Tuning): Recognizes specific subjects (e.g., individual pets like Meowy and Jelly) by averaging 512-float vector embeddings from sample photos and performing cosine similarity checks at run-time—without retraining neural network weights.
-5. Hierarchical Directed Tag Tree (DAG): Stores tags in a parent-child graph (e.g., Meowy $\rightarrow$ Cat $\rightarrow$ Pet $\rightarrow$ Animal). Searching for top-level tags like Cat automatically retrieves all descendant child images via recursive database queries.
-6. Automated Tag Normalization & Discovery: Discovers new visual elements in unmapped photos while applying string cleaning, lowercasing, and fuzzy matching (Levenshtein distance) to prevent tag duplication (dogs $\rightarrow$ dog).
-7. Interactive Preview Gallery UI: Provides a lazy-loaded desktop thumbnail browser with side-by-side metadata, an interactive category tree filter, and confidence score displays.
-8. Real-Time Human-in-the-Loop Correction & Vector Recalibration: Allows users to override misclassified tags on the spot, instantly updating SQLite and relocating the physical file if needed. When a user confirms or fixes an entity label, the app automatically updates the stored entity reference vector to improve future scanning accuracy.
+5. Hierarchical Directed Tag Tree (DAG): Stores tags in a parent-child graph (e.g., Meowy → Cat → Pet → Animal). Searching for top-level tags like Cat automatically retrieves all descendant child images via recursive database queries.
+6. Automated Tag Normalization & Discovery: Discovers new visual elements in unmapped photos while applying string cleaning, lowercasing, and fuzzy matching (Levenshtein distance) to prevent tag duplication (dogs → dog).
+7. Interactive Preview Gallery UI: Lazy-loaded thumbnail browser with side-by-side metadata, category tree filter, and confidence scores. Preview reads files via DB-stored relative paths after moves.
+8. Real-Time Human-in-the-Loop Correction & Vector Recalibration: Users override misclassified tags on the spot, updating SQLite. When a user confirms or fixes an entity label, the app updates the stored entity reference vector to improve future scanning accuracy.
+9. Binary Distribution (product phase): Users download a runnable build from releases; source remains in GitHub for development. Windowed packaging is intentionally last after the core loop is solid.
+
+## Build Phases (reference)
+
+1. Bootstrap: Python project, local web UI shell, ADK agent skeletons, drive-root / relative-path rules.
+2. Vertical slice: SQLite schema + CTEs, Scan excluding `Photo_Tagged/`, gallery preview, manual tag edit.
+3. Metadata agent: EXIF date/device/GPS; year-folder fallback policy.
+4. Vision (online first): Gemini tagging, normalize/dedupe, DAG attach, confidence in UI.
+5. Storage agent: move to `Photo_Tagged/<year>/`, then DB path update; collision and failure handling.
+6. Offline + entities: ONNX fallback, embeddings, few-shot entities, vector recalibration.
+7. Polish: tree filter, indexes, thumbnails, repair-on-scan.
+8. Packaging (last): bundled binary + native window, GitHub Releases for Win/macOS, USB copy instructions.
 
 ## Final Rule
 
-1. This project-info is initial design. It should act as a reference, but is allowed to be challenge anytime should have discuss with user
+1. This project-info is living design. It is a reference for agents and contributors, but it may be challenged anytime — discuss with the user before changing locked decisions (especially ADK, Scan/move order, and `Photo_Tagged/<year>/` layout).

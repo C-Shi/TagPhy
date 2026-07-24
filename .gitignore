@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Secrets
+.env
+
+# Runtime / USB data (never commit)
+*.db
+Photo_Tagged/
+
+# OS
+.DS_Store
