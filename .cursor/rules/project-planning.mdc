@@ -1,0 +1,72 @@
+---
+description: TagPhy development stages — guide for writing Trello stories
+alwaysApply: false
+---
+
+## Tasks
+
+### Stage One: Setup and Preparation
+
+1. Project Setup: Structure the basic project skeleton, with no real functionality yet.
+
+### Stage Two: Agent Development
+
+No web UI. Call agents from the CLI with a relative file path.
+
+At this stage: Gemini inference only. All agent work goes through Gemini.
+
+1. Build Metadata Agent: given a single file path, extract the picture's metadata and return it to state.
+2. Build Vision Agent: given a single file path, extract one main tag and one secondary tag. (Initial phase only; later we feed existing tags first.) All tags must be lowercase and singular, except words that are naturally capitalized (e.g. country names, acronyms).
+3. Build Storage Agent: given a file path, metadata, and a list of tags:
+   3a. Use the year from metadata to move the file to `Photo_Tagged/<year>/original_file_name`. If year cannot be determined, move to `Photo_Tagged/Unknown/original_file_name`.
+   3b. Return and print a dictionary of metadata, new file path, and tags. No DB writes at this step.
+   3c. Also add the numeric year as a tag (e.g. `"2024"`, `"2025"` — not the word `"year"`). Year comes from Metadata Agent only; never from Vision Agent. Year tags exist so photos are searchable/filterable by year in the GUI.
+4. Build Orchestrator Agent: root agent for a supplied file path.
+   4a. Coordinate Metadata, Vision, and Storage agents; return success or fail.
+   4b. If processing fails, return a failure log (DB write comes in a later stage).
+
+### Stage Three: Multi Directories and Multi File Processing
+
+1. Build a facilitator class (or agent — TBD): accept a relative path.
+   1a. If the path is a single file, call the Orchestrator and process it.
+   1b. If the path is a directory, DFS to collect all image paths (optionally in chunks).
+   1c. Loop through each image and call the Orchestrator.
+   1d. After each chunk, repeat 1b–1c until no images remain in the target directory.
+   1e. Path must stay within the app root (e.g. on USB, do not process paths outside the USB).
+   1f. Path must not be `Photo_Tagged/` (that folder is the output of processing).
+
+2. (Optional) Multi-thread or multi-process so multiple chunks can run in parallel.
+
+### Stage Four: Database Integration
+
+1. Database ERD + DDL: tables for image info (file path, metadata, tags); failure-log table for processed-but-untagged files (for human follow-up); tags as a DAG (multi-parent allowed); include migrations.
+2. Migration runner: on app/web-server start, always run pending migrations.
+3. Integrate DB writes into Storage Agent.
+   3a. Write to DB only after the file move succeeds. Treat move + DB update as one logical unit (custom approach to minimize inconsistency risk).
+4. Integrate DB writes into Orchestrator Agent.
+   4a. When any sub-agent errors, Orchestrator writes the failure to the DB log.
+5. Integrate existing tags with Vision Agent: before Vision runs, load all existing tags. Prefer matching existing tags; if several match, return all matched. Prefer the most specific tag only when both parent and child apply (e.g. Cat picture → tag `Cat`, not also `Animal`). This matching/exclusivity applies only to Vision tags. Year tags (Stage 2.3c) are inserted directly and skip this logic.
+
+### Stage Five: Web Server GUI (FastAPI + React)
+
+1. `/scan`: page to browse a file or folder path and click Scan. Agents classify and move files.
+2. `/tags`: list all tags with photo counts; navigate into each tag; show DAG relationships (multi-parent / multi-child).
+3. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of photos tagged directly under that tag (with view options).
+4. Search and filter on all pages except `/scan`.
+5. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
+
+### Stage Six: Complicated Scenarios
+
+1. Agent processing error handling (Detail TBD).
+2. Naming conflicts on move / duplicate filenames (Detail TBD).
+3. Wrap into a desktop app (start with Mac; Windows optional).
+
+### Stage Seven: Additional Features TBD
+
+1. Dual inference: local model when offline or when remote API should not be used (Detail TBD).
+2. Few-shot entity recognition (embeddings, cosine similarity) (Detail TBD).
+3. Vision Agent update: set an upper limit on how many tags a picture can receive.
+
+## Status
+
+Currently at Stage One, task 1.
