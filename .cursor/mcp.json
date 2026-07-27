@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "trello": {
+      "command": "/Users/cheng/.nvm/versions/node/v18.18.2/bin/npx",
+      "args": ["-y", "@delorenj/mcp-server-trello"],
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PATH": "/Users/cheng/.nvm/versions/node/v18.18.2/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "NPM_CONFIG_PREFIX": "/Users/cheng/.nvm/versions/node/v18.18.2",
+        "ELECTRON_RUN_AS_NODE": ""
+      }
+    }
+  }
+}
