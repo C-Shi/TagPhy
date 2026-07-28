@@ -7,14 +7,16 @@ import reverse_geocoder as rg
 register_heif_opener()
 
 
-
-
-
 class ImageProcessor:
-    def __init__(self):
-        pass
-    def extract_metadata(self, image_path: str) -> str:
-        """Process an image and return the path to the processed image."""
+    def extract_metadata(self, image_path: str) -> dict:
+        """Extract metadata from an image. Returns the year taken and the location.
+        
+        Args:
+            image_path: The path to the image to process.
+
+        Returns:
+            A dictionary containing the year taken and the location.
+        """
         im = Image.open(image_path)
         exif = im.getexif()
 
