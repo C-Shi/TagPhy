@@ -25,6 +25,8 @@ At this stage: Gemini inference only. All agent work goes through Gemini.
    4a. Coordinate Metadata, Vision, and Storage agents; return success or fail.
    4b. If processing fails, return a failure log (DB write comes in a later stage).
 
+5. Build Runner that wrap all agent
+
 ### Stage Three: Multi Directories and Multi File Processing
 
 1. Build a facilitator class (or agent — TBD): accept a relative path.

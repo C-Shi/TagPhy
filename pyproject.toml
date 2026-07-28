@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tagphy"
 version = "0.1.0"
-description = "Portable USB photo cataloger (learning project)"
+description = "Portable USB photo cataloger"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,6 +13,9 @@ dependencies = [
   "uvicorn[standard]>=0.32.0",
   "python-dotenv>=1.0.0",
   "google-adk>=1.0.0",
+  "pillow~=12.3.0",
+  "pillow-heif~=1.5.0",
+  "reverse_geocoder",
 ]
 
 [project.scripts]

@@ -14,6 +14,7 @@ build/
 # Runtime / USB data (never commit)
 *.db
 Photo_Tagged/
+dev/
 
 # OS
 .DS_Store
