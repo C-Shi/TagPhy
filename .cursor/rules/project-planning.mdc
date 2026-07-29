@@ -22,7 +22,7 @@ No web UI. Call the pipeline from the CLI with a relative file path.
 At this stage: Gemini for vision tagging only (direct API). Metadata and storage are deterministic Python.
 
 1. Metadata extraction function: given a single file path, extract year (from EXIF) and location (GPS + offline reverse geocode when available); return a dict. **Done** (`ImageProcessor` in `src/tagphy/tools/image_processor.py`).
-2. Vision tagging function: given a single file path, extract one main tag and one secondary tag via a direct Gemini call (downscale image, JSON structured output, deterministic lowercase/singular normalization). Engine interface designed so an ONNX engine can swap in later (dual inference). All tags must be lowercase and singular, except words that are naturally capitalized (e.g. country names, acronyms). (Initial phase only; later we feed existing tags first.)
+2. Vision tagging function: given a single file path, extract one main tag and one secondary tag via a direct Gemini call (downscale image, JSON structured output). Engine interface designed so an ONNX engine can swap in later (dual inference). Tag casing/singular form is guided by the prompt only — **no hard-coded normalize/allowlist in Python for now** (catalog/DB + human correction handle consistency later). (Initial phase only; later we feed existing tags first.)
 3. Storage function: given a file path, metadata, and a list of tags:
    3a. Use the year from metadata to move the file to `Photo_Tagged/<year>/original_file_name`. If year cannot be determined, move to `Photo_Tagged/Unknown/original_file_name`.
    3b. Return and print a dictionary of metadata, new file path, and tags. No DB writes at this step.
