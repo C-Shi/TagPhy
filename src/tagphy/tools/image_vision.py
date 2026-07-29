@@ -87,5 +87,7 @@ class GeminiVisionEngine(ImageVision):
 
 if __name__ == "__main__":
     engine = GeminiVisionEngine()
-    response = engine.tagging_image("/Users/cheng/Documents/Developer/TagPhy/dev/4.jpg")
+    response = engine.tagging_image(
+        "/Users/cheng/Documents/Developer/TagPhy/dev/5.HEIC"
+    )
     print(response)

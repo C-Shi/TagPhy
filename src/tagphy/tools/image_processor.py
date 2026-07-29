@@ -108,5 +108,7 @@ class ImageMetadata:
 
 
 if __name__ == "__main__":
-    meta = ImageMetadata().extract_metadata("../../../dev/5.Heic")
+    meta = ImageMetadata().extract_metadata(
+        "/Users/cheng/Documents/Developer/TagPhy/dev/5.HEIC"
+    )
     print(meta)
