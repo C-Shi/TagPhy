@@ -1,4 +1,3 @@
-
 from PIL import Image, ExifTags
 from typing import Any
 from pillow_heif import register_heif_opener
@@ -7,10 +6,10 @@ import reverse_geocoder as rg
 register_heif_opener()
 
 
-class ImageProcessor:
+class ImageMetadata:
     def extract_metadata(self, image_path: str) -> dict:
         """Extract metadata from an image. Returns the year taken and the location.
-        
+
         Args:
             image_path: The path to the image to process.
 
@@ -26,7 +25,7 @@ class ImageProcessor:
         exif_ifd = exif.get_ifd(ExifTags.IFD.Exif)
         datetime_original = exif_ifd.get(ExifTags.Base.DateTimeOriginal)
         datetime_fallback = exif.get(ExifTags.Base.DateTime)
-        
+
         if datetime_original:
             year_taken = datetime_original.split(":")[0]
         elif datetime_fallback:
@@ -59,8 +58,9 @@ class ImageProcessor:
 
         return degrees_f + (minutes_f / 60.0) + (seconds_f / 3600.0)
 
-
-    def parse_gps_to_lat_lon(self, gps_info: dict[int, Any] | None) -> tuple[float, float] | None:
+    def parse_gps_to_lat_lon(
+        self, gps_info: dict[int, Any] | None
+    ) -> tuple[float, float] | None:
         """
         Parse a Pillow GPS IFD dict into (lat, lon) decimal degrees.
 
@@ -106,6 +106,7 @@ class ImageProcessor:
 
         return (lat, lon)
 
+
 if __name__ == "__main__":
-   meta =   ImageProcessor().extract_metadata("../../../dev/5.Heic")
-   print(meta)
+    meta = ImageMetadata().extract_metadata("../../../dev/5.Heic")
+    print(meta)

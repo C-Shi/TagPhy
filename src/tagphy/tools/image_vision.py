@@ -9,13 +9,13 @@ from abc import ABC, abstractmethod
 load_dotenv()
 
 
-class Vision(ABC):
+class ImageVision(ABC):
     @abstractmethod
     def tagging_image(self, image_path: str) -> Dict[str, str]:
         pass
 
 
-class GeminiVisionEngine(Vision):
+class GeminiVisionEngine(ImageVision):
     def __init__(self):
         register_heif_opener()
         self.client = Client(
