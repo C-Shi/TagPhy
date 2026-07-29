@@ -5,6 +5,11 @@ from typing import Any
 
 class ImageStorage:
     def __init__(self, workdir: str):
+        """Initialize the image storage.
+
+        Args:
+            workdir: The destination root directory to store the images.
+        """
         self.workdir = workdir
 
     def store_image(
@@ -30,7 +35,8 @@ class ImageStorage:
                 "destination_path": destination_path,
                 "tags": tags_db,
                 "metadata": metadata,
-                "error": "File already exists",
+                # If duplicate file is found, return a warning only
+                "warning": "File already exists. No action taken",
             }
 
         os.makedirs(destination_folder, exist_ok=True)
@@ -43,16 +49,9 @@ class ImageStorage:
                 "tags": tags_db,
                 "metadata": metadata,
             }
-        except FileNotFoundError as e:
-            self._log_file_move_error(image_path, destination_path, e)
-            return {
-                "error": e.strerror,
-            }
         except Exception as e:
             self._log_file_move_error(image_path, destination_path, e)
-            return {
-                "error": e.message,
-            }
+            raise e
 
     def _update_db_record(self, destination_path: str, tags: dict[str, str]):
         """Place holder for updating the database record."""

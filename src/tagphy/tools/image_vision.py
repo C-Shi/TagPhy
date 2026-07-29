@@ -11,7 +11,7 @@ load_dotenv()
 
 class ImageVision(ABC):
     @abstractmethod
-    def tagging_image(self, image_path: str) -> Dict[str, str]:
+    def tag_image(self, image_path: str) -> Dict[str, str]:
         pass
 
 
@@ -39,7 +39,7 @@ class GeminiVisionEngine(ImageVision):
             rgb.save(buffer, format="JPEG", quality=85)
             return buffer.getvalue()
 
-    def tagging_image(self, image_path: str) -> Dict[str, str]:
+    def tag_image(self, image_path: str) -> Dict[str, str]:
         image_buff = self._get_image_thumbnail(image_path)
 
         system_instruction = """
@@ -87,7 +87,5 @@ class GeminiVisionEngine(ImageVision):
 
 if __name__ == "__main__":
     engine = GeminiVisionEngine()
-    response = engine.tagging_image(
-        "/Users/cheng/Documents/Developer/TagPhy/dev/5.HEIC"
-    )
+    response = engine.tag_image("/Users/cheng/Documents/Developer/TagPhy/dev/5.HEIC")
     print(response)

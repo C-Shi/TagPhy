@@ -36,8 +36,7 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
    1b. If the path is a directory, DFS to collect all image paths (optionally in chunks).
    1c. Loop through each image and call the pipeline.
    1d. After each chunk, repeat 1b–1c until no images remain in the target directory.
-   1e. Path must stay within the app root (e.g. on USB, do not process paths outside the USB).
-   1f. Path must not be `Photo_Tagged/` (that folder is the output of processing).
+   1e. Path must not be `Photo_Tagged/` (that folder is the output of processing).
 
 2. (Optional) Multi-thread or multi-process so multiple chunks can run in parallel.
 

@@ -1,0 +1,80 @@
+---
+description: >-
+  TagPhy agent use cases and development sequence. Use only when the user
+  explicitly mentions agent-planning or asks about the planned agent system.
+alwaysApply: false
+---
+
+# TagPhy Agent Planning
+
+This file preserves selected future ideas. It is living design and may be
+challenged when implementation begins. Do not load it unless explicitly
+mentioned.
+
+## Core boundaries
+
+- Keep the normal metadata → vision → storage pipeline deterministic.
+- Agents manage natural-language intent, iterative decisions, tool selection,
+  and human clarification.
+- Python functions perform retrieval, scoring, embedding comparison, database
+  writes, and file operations.
+- Search and investigation tools are read-only.
+- Tag replacement, entity backfill, file moves, and archival require explicit
+  human confirmation.
+- Persistent knowledge belongs in SQLite; model conversation is not memory.
+
+## Selected agent use cases
+
+### Multi-agent system
+
+1. **Catalog Concierge**
+   - Coordinate the interactive agent system and route requests to specialists.
+   - Do not directly manipulate files or database records.
+
+2. **Interactive Photo Finder**
+   - Accept a user's natural-language memory of a photo.
+   - Search descriptions, tags, metadata, dates, locations, and the tag DAG.
+   - Show likely thumbnails and remember rejected candidates and constraints.
+   - Ask focused follow-up questions, then broaden or narrow the search until
+     the user identifies the photo.
+
+3. **Entity Onboarding — must-have**
+   - Accept descriptions of named subjects such as Meowy and Jelly.
+   - Find candidate photos and ask the user to confirm reference images.
+   - Create persistent embedding profiles from confirmed references.
+   - Backfill only high-confidence entity tags and send ambiguous matches to
+     the user.
+   - Let future scans add both the generic tag (`cat`) and entity tag
+     (`Meowy` or `Jelly`).
+
+4. **Duplicate Resolver — optional**
+   - Investigator gathers hashes, embeddings, metadata, dimensions, and
+     previews.
+   - Judge recommends the canonical copy and explains the evidence.
+   - Never delete automatically; require approval and archive rejected copies
+     for review.
+
+### Single agent
+
+5. **Selective Reanalysis Assistant**
+   - Find low-confidence or user-selected photos.
+   - Decide which deterministic metadata or vision tools should rerun.
+   - Compare current and proposed metadata, tags, and descriptions.
+   - Require confirmation before replacing catalog data.
+
+## Development sequence
+
+1. Finish the existing non-agent project stories.
+2. Build SQLite catalog queries, description search, thumbnail retrieval, and
+   structured tool return values.
+3. Build Interactive Photo Finder as the first conversational specialist.
+4. Add image embeddings, reference-image records, confidence thresholds, and
+   correction-driven profile recalibration.
+5. Build Entity Onboarding and integrate its confirmed profiles with future
+   scans.
+6. Add processing history and confidence tracking, then build Selective
+   Reanalysis Assistant.
+7. Add Catalog Concierge after multiple specialists exist and route requests
+   through it.
+8. Build Duplicate Resolver after hash/embedding similarity and safe archive
+   operations are available.
