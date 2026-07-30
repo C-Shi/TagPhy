@@ -33,7 +33,7 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 1. Build a facilitator class (or function): accept a relative path.
    1a. If the path is a single file, call the pipeline and process it.
-   1b. If the path is a directory, DFS to collect all image paths (optionally in chunks).
+   1b. If the path is a directory, collect all image paths (optionally in chunks) (BFS vs DFS?).
    1c. Loop through each image and call the pipeline.
    1d. After each chunk, repeat 1b–1c until no images remain in the target directory.
    1e. Path must not be `Photo_Tagged/` (that folder is the output of processing).
@@ -82,4 +82,4 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 ## Status
 
-Currently at Stage Two, task 2 (vision tagging function). Metadata extraction function is done.
+Stage Two complete. Currently at Stage Three, task 1 (multi-directory / multi-file facilitator) done; optional concurrency (task 2) not started.
