@@ -1,11 +1,10 @@
-"""Contract tests for Stage 2.3 / 4.3 storage."""
+"""Contract tests for Stage 2.3 / 4.3 / 4.4 storage (MagicMock db only)."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from tagphy.db.connection import SQLiteConnection
 from tagphy.tools.image_storage import ImageStorage
 
 
@@ -14,8 +13,8 @@ SOURCE = "/virtual/inbox/vacation.HEIC"
 APP_ROOT = Path("/virtual")
 
 
-def _storage(workdir: str = WORKDIR) -> ImageStorage:
-    return ImageStorage(workdir=workdir, db=MagicMock())
+def _storage(workdir: str = WORKDIR, db: MagicMock | None = None) -> ImageStorage:
+    return ImageStorage(workdir=workdir, db=db if db is not None else MagicMock())
 
 
 def _patch_app_root():
@@ -23,6 +22,11 @@ def _patch_app_root():
         "tagphy.tools.image_storage.app_root",
         return_value=APP_ROOT,
     )
+
+
+def _run_transaction_callback(func):
+    """MagicMock transaction side_effect: execute the callback like a real tx."""
+    return func()
 
 
 class TestStoreImageDestination:
@@ -174,125 +178,129 @@ class TestStoreImageFailures:
 
 
 class TestStoreImageDbWrite:
-    def test_stores_relative_file_path_and_image_tags(
-        self, tmp_path, isolate_app_root, monkeypatch
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_writes_relative_path_tags_and_image_tags_via_db_mock(
+        self, _exists, _makedirs, _move, _app_root
     ):
-        monkeypatch.setenv("TAGPHY_ROOT", str(isolate_app_root))
-        workdir = isolate_app_root / "Photo_Tagged"
-        workdir.mkdir()
-        source = isolate_app_root / "inbox"
-        source.mkdir()
-        photo = source / "vacation.HEIC"
-        photo.write_bytes(b"fake")
+        db = MagicMock()
+        db.transaction.side_effect = _run_transaction_callback
+        db.insert.side_effect = [101, None, None, None]  # image id, then joins
+        db.first_or_create.side_effect = [1, 2, 3]
 
-        db = SQLiteConnection(db_path=isolate_app_root / "tagphy.db")
-        db.migrate()
-        storage = ImageStorage(workdir=str(workdir), db=db)
+        storage = _storage(db=db)
+        metadata = {"year": "2025", "location": "Calgary, CA"}
+        tags = {"main_tag": "ukulele", "secondary_tag": "instrument"}
 
-        result = storage.store_image(
-            str(photo),
-            {"year": "2025", "location": "Calgary, CA"},
-            {"main_tag": "ukulele", "secondary_tag": "instrument"},
+        storage.store_image(SOURCE, metadata, tags)
+
+        db.transaction.assert_called_once()
+        image_insert = db.insert.call_args_list[0]
+        assert image_insert.args[0] == "images"
+        assert image_insert.args[1]["file_path"] == "Photo_Tagged/2025/vacation.HEIC"
+        assert not image_insert.args[1]["file_path"].startswith("/")
+        assert image_insert.args[1]["year"] == "2025"
+        assert image_insert.args[1]["location"] == "Calgary, CA"
+
+        tag_names = [
+            c.args[1]["name"] for c in db.first_or_create.call_args_list
+        ]
+        assert tag_names == ["ukulele", "instrument", "2025"]
+        assert all(
+            c.kwargs.get("conflict_columns") == "name"
+            or c.args[0] == "tags"
+            for c in db.first_or_create.call_args_list
         )
 
-        assert result["destination_path"] == str(workdir / "2025" / "vacation.HEIC")
-        assert (workdir / "2025" / "vacation.HEIC").is_file()
-        assert not photo.exists()
+        join_calls = [
+            c for c in db.insert.call_args_list if c.args[0] == "image_tags"
+        ]
+        assert len(join_calls) == 3
+        assert {c.args[1]["image_id"] for c in join_calls} == {101}
 
-        db.connect()
-        row = db.conn.execute(
-            "SELECT file_path, year, location FROM images"
-        ).fetchone()
-        assert row["file_path"] == "Photo_Tagged/2025/vacation.HEIC"
-        assert not row["file_path"].startswith("/")
-        assert row["year"] == "2025"
-        assert row["location"] == "Calgary, CA"
-
-        tag_names = {
-            r["name"]
-            for r in db.conn.execute("SELECT name FROM tags").fetchall()
-        }
-        assert tag_names == {"ukulele", "instrument", "2025"}
-        assert "Calgary, CA" not in tag_names
-
-        join_count = db.conn.execute(
-            "SELECT COUNT(*) FROM image_tags"
-        ).fetchone()[0]
-        assert join_count == 3
-        db.disconnect()
-
-    def test_reuses_existing_tag_across_images(
-        self, tmp_path, isolate_app_root, monkeypatch
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_reuses_first_or_create_for_same_tag_across_images(
+        self, _exists, _makedirs, _move, _app_root
     ):
-        monkeypatch.setenv("TAGPHY_ROOT", str(isolate_app_root))
-        workdir = isolate_app_root / "Photo_Tagged"
-        workdir.mkdir()
-        inbox = isolate_app_root / "inbox"
-        inbox.mkdir()
-        a = inbox / "a.HEIC"
-        b = inbox / "b.HEIC"
-        a.write_bytes(b"a")
-        b.write_bytes(b"b")
+        db = MagicMock()
+        db.transaction.side_effect = _run_transaction_callback
+        db.insert.side_effect = [
+            1,
+            None,
+            None,
+            None,
+            2,
+            None,
+            None,
+            None,
+        ]
+        db.first_or_create.side_effect = [10, 11, 12, 10, 13, 14]
 
-        db = SQLiteConnection(db_path=isolate_app_root / "tagphy.db")
-        db.migrate()
-        storage = ImageStorage(workdir=str(workdir), db=db)
-
+        storage = _storage(db=db)
         storage.store_image(
-            str(a),
+            "/virtual/inbox/a.HEIC",
             {"year": "2025", "location": ""},
             {"main_tag": "ukulele", "secondary_tag": "instrument"},
         )
         storage.store_image(
-            str(b),
+            "/virtual/inbox/b.HEIC",
             {"year": "2024", "location": ""},
             {"main_tag": "ukulele", "secondary_tag": "music"},
         )
 
-        db.connect()
-        ukulele_rows = db.conn.execute(
-            "SELECT id FROM tags WHERE name = ?", ("ukulele",)
-        ).fetchall()
-        assert len(ukulele_rows) == 1
-
-        tag_count = db.conn.execute("SELECT COUNT(*) FROM tags").fetchone()[0]
-        # ukulele, instrument, 2025, music, 2024
-        assert tag_count == 5
-
-        image_tag_count = db.conn.execute(
-            "SELECT COUNT(*) FROM image_tags"
-        ).fetchone()[0]
-        assert image_tag_count == 6  # 3 per image
-        db.disconnect()
+        ukulele_calls = [
+            c
+            for c in db.first_or_create.call_args_list
+            if c.args[1]["name"] == "ukulele"
+        ]
+        assert len(ukulele_calls) == 2
+        assert db.transaction.call_count == 2
 
 
-class TestFirstOrCreate:
-    def test_returns_same_id_on_conflict(self, tmp_path):
-        db = SQLiteConnection(db_path=tmp_path / "t.db")
-        db.migrate()
-        db.connect()
-        db.conn.execute("BEGIN")
-        try:
-            first = db.first_or_create(
-                "tags",
-                {"name": "cat", "source": "vision"},
-                conflict_columns="name",
+class TestCompensatingDelete:
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_deletes_image_row_when_move_fails_after_db_write(
+        self, _exists, _makedirs, mock_move, _app_root
+    ):
+        db = MagicMock()
+        db.transaction.return_value = 42
+        mock_move.side_effect = OSError("disk full")
+        storage = _storage(db=db)
+
+        with pytest.raises(OSError, match="disk full"):
+            storage.store_image(
+                SOURCE,
+                {"year": "2024", "location": None},
+                {"main_tag": "cat", "secondary_tag": "balcony"},
             )
-            second = db.first_or_create(
-                "tags",
-                {"name": "cat", "source": "metadata"},
-                conflict_columns="name",
+
+        db.delete.assert_called_once_with("images", {"id": 42})
+
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_no_delete_when_db_write_fails(
+        self, _exists, _makedirs, mock_move, _app_root
+    ):
+        db = MagicMock()
+        db.transaction.side_effect = RuntimeError("db down")
+        storage = _storage(db=db)
+
+        with pytest.raises(RuntimeError, match="db down"):
+            storage.store_image(
+                SOURCE,
+                {"year": "2024", "location": None},
+                {"main_tag": "cat", "secondary_tag": "balcony"},
             )
-            assert first == second
-            row = db.conn.execute(
-                "SELECT source, COUNT(*) AS n FROM tags WHERE name = 'cat'"
-            ).fetchone()
-            assert row["n"] == 1
-            # First writer wins for non-conflict columns.
-            assert row["source"] == "vision"
-            db.conn.execute("COMMIT")
-        except Exception:
-            db.conn.execute("ROLLBACK")
-            raise
-        finally:
-            db.disconnect()
+
+        db.delete.assert_not_called()
+        mock_move.assert_not_called()

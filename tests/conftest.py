@@ -7,9 +7,9 @@ import pytest
 def isolate_app_root(tmp_path, monkeypatch):
     """Point app_root() at a throwaway directory for every test.
 
-    Without this, SQLiteConnection and ImageProcessingPipeline fall back to the
-    real repository root, so a test that forgets to pass an explicit path would
-    create tagphy.db or Photo_Tagged/ in the working tree.
+    Safety net only: unit tests must not open real SQLite. If something
+    accidentally constructs SQLiteConnection(), this keeps writes out of the
+    repository working tree. Prefer MagicMock for all db interactions.
     """
     sandbox = tmp_path / "app_root"
     sandbox.mkdir(exist_ok=True)

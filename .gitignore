@@ -13,6 +13,8 @@ build/
 
 # Runtime / USB data (never commit)
 *.db
+*.db-shm
+*.db-wal
 Photo_Tagged/
 dev/
 

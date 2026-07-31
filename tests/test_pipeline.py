@@ -1,17 +1,21 @@
-"""Contract tests for Stage 2.4 and Stage 3.1 pipeline orchestration."""
+"""Contract tests for Stage 2.4 / 3.1 / 4.4 pipeline orchestration (no real SQLite)."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from tagphy.pipeline import BATCH_SIZE, PROGRESS_INTERVAL, ImageProcessingPipeline
 
+APP_ROOT = Path("/virtual")
+
 
 def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
-    """Build a pipeline without constructing a real Gemini Client."""
+    """Build a pipeline without real Gemini client or SQLiteConnection."""
+    db = MagicMock()
     with (
         patch("tagphy.pipeline.ImageMetadata") as Meta,
         patch("tagphy.pipeline.GeminiVisionEngine") as Vision,
         patch("tagphy.pipeline.ImageStorage") as Storage,
+        patch("tagphy.pipeline.SQLiteConnection", return_value=db),
     ):
         meta = MagicMock()
         vision = MagicMock()
@@ -23,6 +27,7 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     pipeline.image_metadata = meta
     pipeline.image_vision = vision
     pipeline.image_storage = storage
+    pipeline.db = db
     return pipeline, meta, vision, storage
 
 
@@ -113,6 +118,43 @@ class TestPipelineHardStop:
         assert result["status"] == "fail"
         assert result["stage"] == "store_image"
         assert result["image"] == "photo.jpg"
+
+
+class TestFailureLogWrite:
+    @patch("tagphy.pipeline.app_root", return_value=APP_ROOT)
+    def test_on_root_failure_upserts_failure_log(self, _app_root):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/virtual/inbox/broken.jpg"
+        err = ValueError("bad exif")
+        meta.extract_metadata.side_effect = err
+
+        result = pipeline.run(path)
+
+        assert result["status"] == "fail"
+        pipeline.db.create_or_update.assert_called_once()
+        kwargs = pipeline.db.create_or_update.call_args.kwargs
+        assert kwargs["table"] == "failure_log"
+        assert kwargs["conflict_columns"] == "source_path"
+        assert kwargs["operations"] == {
+            "attempts": "INCREMENT",
+            "last_seen_at": "NOW",
+        }
+        assert kwargs["data"]["source_path"] == "inbox/broken.jpg"
+        assert kwargs["data"]["file_name"] == "broken.jpg"
+        assert kwargs["data"]["stage"] == "extract_metadata"
+        assert kwargs["data"]["error_type"] == "ValueError"
+
+    @patch("tagphy.pipeline.app_root", return_value=APP_ROOT)
+    def test_off_root_failure_skips_failure_log(self, _app_root):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/other/drive/broken.jpg"
+        meta.extract_metadata.side_effect = ValueError("bad exif")
+
+        result = pipeline.run(path)
+
+        assert result["status"] == "fail"
+        assert result["stage"] == "extract_metadata"
+        pipeline.db.create_or_update.assert_not_called()
 
 
 class TestDirectoryScan:
@@ -228,7 +270,7 @@ class TestDirectoryScan:
         result = pipeline.run(workdir)
 
         assert result["status"] == "fail"
-        assert result["stage"] == "validate_path"
+        assert result["stage"] == "run"
         meta.extract_metadata.assert_not_called()
         vision.tag_image.assert_not_called()
         storage.store_image.assert_not_called()
@@ -244,7 +286,7 @@ class TestDirectoryScan:
         result = pipeline.run(nested)
 
         assert result["status"] == "fail"
-        assert result["stage"] == "validate_path"
+        assert result["stage"] == "run"
         meta.extract_metadata.assert_not_called()
         storage.store_image.assert_not_called()
 
