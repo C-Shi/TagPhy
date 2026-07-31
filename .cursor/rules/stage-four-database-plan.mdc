@@ -7,14 +7,16 @@ alwaysApply: false
 
 # Stage Four Plan — Database Integration
 
-Status: **plan only, not implemented.** Living design; challenge before building.
+Status: **Stage 4.1 implemented.** Living design; challenge before changing locked decisions.
+DDL source of truth: `src/tagphy/db/migrations/001_create_table.sql`.
+ERD mirror: `src/tagphy/db/schema.md`.
 
 ## Scope of task 4.1
 
 Schema only. Deliver an ERD, the DDL as a first migration file, a connection
 helper, and tests. Explicitly **not** in 4.1:
 
-- The migration runner (task 4.2).
+- The migration runner hook on app/web-server start (task 4.2).
 - Wiring writes into `ImageStorage` / `ImageProcessingPipeline` (tasks 4.3, 4.4).
 - Loading existing tags for the vision function (task 4.5).
 

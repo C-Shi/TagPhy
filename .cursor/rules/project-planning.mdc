@@ -42,7 +42,7 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 ### Stage Four: Database Integration
 
-1. Database ERD + DDL: tables for image info (file path, metadata, tags); failure-log table for processed-but-untagged files (for human follow-up); tags as a DAG (multi-parent allowed); include migrations. Design detail and locked decisions live in `.cursor/rules/stage-four-database-plan.mdc` (plan only, not implemented).
+1. Database ERD + DDL: tables for image info (file path, metadata, tags); failure-log table for processed-but-untagged files (for human follow-up); tags as a DAG (multi-parent allowed); include migrations. **Done** — DDL in `src/tagphy/db/migrations/001_create_table.sql`; ERD/docs in `src/tagphy/db/schema.md`; connection helper in `src/tagphy/db/connection.py`. Design notes in `.cursor/rules/stage-four-database-plan.mdc`.
 2. Migration runner: on app/web-server start, always run pending migrations.
 3. Integrate DB writes into the storage function.
    3a. Write to DB only after the file move succeeds. Treat move + DB update as one logical unit (custom approach to minimize inconsistency risk).
@@ -82,4 +82,4 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 ## Status
 
-Stage Two complete. Stage Three task 1 (multi-directory / multi-file facilitator) done; task 2 (concurrency) deferred by decision. Next: Stage Four task 1 (database ERD + DDL).
+Stage Two complete. Stage Three task 1 (multi-directory / multi-file facilitator) done; task 2 (concurrency) deferred by decision. Stage Four task 1 (database ERD + DDL) done. Next: Stage Four task 2 (migration runner on app/web-server start).
