@@ -4,24 +4,22 @@ from typing import Any
 
 
 class ImageStorage:
-    def __init__(self, workdir: str):
+    def __init__(self, workdir: str, db: Any):
         """Initialize the image storage.
 
         Args:
             workdir: The destination root directory to store the images.
         """
         self.workdir = workdir
+        self.db = db
 
     def store_image(
         self, image_path: str, metadata: dict[str, str], tags: dict[str, str]
     ) -> dict[str, Any]:
         year = metadata.get("year") or "Unknown"
-        location = metadata.get("location", None)
 
         tags_db = [*tags.values()]
 
-        if metadata.get("location"):
-            tags_db.append(location)
         if metadata.get("year"):
             tags_db.append(year)
 
@@ -42,8 +40,8 @@ class ImageStorage:
         os.makedirs(destination_folder, exist_ok=True)
 
         try:
+            self._update_db_record(destination_path, metadata, tags_db)
             move(image_path, destination_path)
-            self._update_db_record(destination_path, tags_db)
             return {
                 "destination_path": destination_path,
                 "tags": tags_db,
@@ -53,9 +51,34 @@ class ImageStorage:
             self._log_file_move_error(image_path, destination_path, e)
             raise e
 
-    def _update_db_record(self, destination_path: str, tags: dict[str, str]):
+    def _update_db_record(
+        self, destination_path: str, metadata: dict[str, str], tags: list[str]
+    ):
         """Place holder for updating the database record."""
-        pass
+
+        def insert_record():
+            # Write to image table
+            self.db.insert(
+                "images",
+                {
+                    "file_path": destination_path,
+                    "file_name": os.path.basename(destination_path),
+                    "year": metadata.get("year") or "",
+                    "location": metadata.get("location") or "",
+                },
+            )
+            # Write to tag table
+            year = metadata.get("year")
+            for tag in tags:
+                self.db.insert(
+                    "tags",
+                    {
+                        "name": tag,
+                        "source": "metadata" if year == tag else "vision",
+                    },
+                )
+
+        self.db.transaction(insert_record)
 
     def _log_file_move_error(
         self, image_path: str, destination_path: str, error: Exception

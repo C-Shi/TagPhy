@@ -5,6 +5,7 @@ from pathlib import Path
 from PIL import Image
 from tagphy import app_root
 from tagphy.tools import GeminiVisionEngine, ImageMetadata, ImageStorage
+from tagphy.db.connection import SQLiteConnection
 
 logger = getLogger(__name__)
 
@@ -34,10 +35,13 @@ class ImageProcessingPipeline:
         Args:
             workdir: The destination root directory to store the images.
         """
+
         self.workdir = Path(workdir or (app_root() / DEFAULT_OUTPUT_DIR_NAME)).resolve()
         self.image_metadata = ImageMetadata()
         self.image_vision = GeminiVisionEngine()
-        self.image_storage = ImageStorage(workdir=str(self.workdir))
+        self.image_storage = ImageStorage(
+            workdir=str(self.workdir), db=SQLiteConnection()
+        )
 
     def run(self, path: str | Path):
         """Run the image processing pipeline on a single image or a directory of images.
@@ -197,5 +201,5 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(message)s",
     )
     pipeline = ImageProcessingPipeline()
-    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev")
+    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/IMG_5139.HEIC")
     print(result)

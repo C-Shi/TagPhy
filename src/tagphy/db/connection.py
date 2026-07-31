@@ -5,6 +5,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable
 
 from tagphy import app_root
 
@@ -133,3 +134,21 @@ class SQLiteConnection:
             self.conn.execute("ROLLBACK")
             logger.error("Migration failed, rolled back: %s", path.name)
             raise
+
+    def transaction(self, func: Callable[[], Any]) -> Any:
+        self.connect()
+        self.conn.execute("BEGIN")
+        try:
+            result = func()
+            self.conn.execute("COMMIT")
+            return result
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
+        finally:
+            self.disconnect()
+
+    def insert(self, table: str, data: dict[str, Any]) -> int:
+        query = f"INSERT INTO {table} ({', '.join(data.keys())}) VALUES ({', '.join(['?' for _ in data.keys()])})"
+        self.cursor.execute(query, tuple(data.values()))
+        return self.cursor.lastrowid

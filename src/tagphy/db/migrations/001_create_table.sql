@@ -2,11 +2,11 @@ CREATE TABLE IF NOT EXISTS images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_path TEXT NOT NULL UNIQUE,
     file_name TEXT NOT NULL,
-    year TEXT NOT NULL,
+    year TEXT NOT NULL DEFAULT '',
     location TEXT DEFAULT '',
     description TEXT DEFAULT '',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS tags (
     name TEXT NOT NULL UNIQUE,
     source TEXT NOT NULL,
     description TEXT DEFAULT '',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS image_tags (
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS image_tags (
     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     source TEXT NOT NULL DEFAULT 'vision',
     confidence REAL,
-    created_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (image_id, tag_id)
 );
 
@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS failure_log (
     error_type TEXT,
     error_message TEXT,
     attempts INTEGER NOT NULL DEFAULT 1,
-    first_seen_at TEXT NOT NULL,
-    last_seen_at TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at TEXT
 );
 
