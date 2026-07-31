@@ -149,6 +149,56 @@ class SQLiteConnection:
             self.disconnect()
 
     def insert(self, table: str, data: dict[str, Any]) -> int:
-        query = f"INSERT INTO {table} ({', '.join(data.keys())}) VALUES ({', '.join(['?' for _ in data.keys()])})"
+        assert self.cursor is not None
+        query = (
+            f"INSERT INTO {table} ({', '.join(data.keys())}) "
+            f"VALUES ({', '.join(['?' for _ in data.keys()])})"
+        )
         self.cursor.execute(query, tuple(data.values()))
         return self.cursor.lastrowid
+
+    def first_or_create(
+        self,
+        table: str,
+        data: dict[str, Any],
+        *,
+        conflict_columns: str | list[str],
+        id_column: str = "id",
+    ) -> int:
+        """Insert a row; on unique conflict, return the existing row id.
+
+        conflict_columns must be keys in data and match a UNIQUE / PK target.
+        On conflict, existing non-key columns are left unchanged (first writer wins).
+        """
+        assert self.cursor is not None
+        cols = list(data.keys())
+        conflict = (
+            [conflict_columns]
+            if isinstance(conflict_columns, str)
+            else list(conflict_columns)
+        )
+        missing = [c for c in conflict if c not in data]
+        if missing:
+            raise ValueError(
+                f"conflict_columns not present in data: {missing}"
+            )
+
+        placeholders = ", ".join("?" for _ in cols)
+        conflict_list = ", ".join(conflict)
+        self.cursor.execute(
+            f"INSERT INTO {table} ({', '.join(cols)}) "
+            f"VALUES ({placeholders}) "
+            f"ON CONFLICT({conflict_list}) DO NOTHING",
+            tuple(data[c] for c in cols),
+        )
+        where = " AND ".join(f"{c} = ?" for c in conflict)
+        row = self.cursor.execute(
+            f"SELECT {id_column} FROM {table} WHERE {where}",
+            tuple(data[c] for c in conflict),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError(
+                f"first_or_create failed to find row in {table} "
+                f"after insert/conflict on {conflict}"
+            )
+        return int(row[id_column])

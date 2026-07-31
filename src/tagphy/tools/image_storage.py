@@ -1,6 +1,9 @@
 from shutil import move
 import os
+from pathlib import Path
 from typing import Any
+
+from tagphy import app_root
 
 
 class ImageStorage:
@@ -9,6 +12,7 @@ class ImageStorage:
 
         Args:
             workdir: The destination root directory to store the images.
+            db: Database connection utility (SQLiteConnection).
         """
         self.workdir = workdir
         self.db = db
@@ -54,27 +58,36 @@ class ImageStorage:
     def _update_db_record(
         self, destination_path: str, metadata: dict[str, str], tags: list[str]
     ):
-        """Place holder for updating the database record."""
+        """Write image, first-or-create tags, and image_tags join rows."""
+
+        relative_path = (
+            Path(destination_path).resolve().relative_to(app_root()).as_posix()
+        )
+        year = metadata.get("year") or ""
 
         def insert_record():
-            # Write to image table
-            self.db.insert(
+            image_id = self.db.insert(
                 "images",
                 {
-                    "file_path": destination_path,
+                    "file_path": relative_path,
                     "file_name": os.path.basename(destination_path),
-                    "year": metadata.get("year") or "",
+                    "year": year,
                     "location": metadata.get("location") or "",
                 },
             )
-            # Write to tag table
-            year = metadata.get("year")
-            for tag in tags:
-                self.db.insert(
+            for tag in dict.fromkeys(tags):
+                source = "metadata" if tag == year else "vision"
+                tag_id = self.db.first_or_create(
                     "tags",
+                    {"name": tag, "source": source},
+                    conflict_columns="name",
+                )
+                self.db.insert(
+                    "image_tags",
                     {
-                        "name": tag,
-                        "source": "metadata" if year == tag else "vision",
+                        "image_id": image_id,
+                        "tag_id": tag_id,
+                        "source": source,
                     },
                 )
 
@@ -84,21 +97,3 @@ class ImageStorage:
         self, image_path: str, destination_path: str, error: Exception
     ):
         pass
-
-
-if __name__ == "__main__":
-    image_storage = ImageStorage(
-        workdir="/Users/cheng/Documents/Developer/TagPhy/Photo_Tagged"
-    )
-    result = image_storage.store_image(
-        image_path="/Users/cheng/Documents/Developer/TagPhy/dev/4.JPG",
-        metadata={
-            "year": "2026",
-            "location": "Calgary, CA",
-        },
-        tags={
-            "main_tag": "baby",
-            "secondary_tag": "infant",
-        },
-    )
-    print(result)
