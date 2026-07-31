@@ -34,13 +34,27 @@ class SQLiteConnection:
         self.cursor: sqlite3.Cursor | None = None
 
     def connect(self) -> None:
+        """Open a SQLite connection and apply connection PRAGMAs."""
         self.conn = sqlite3.connect(self.db_path, isolation_level=None)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.execute("PRAGMA journal_mode = DELETE")
         self.cursor = self.conn.cursor()
 
+    def _ensure_connection(self) -> bool:
+        """Open the connection if needed.
+
+        Returns:
+            True if this call opened the connection (caller must disconnect).
+            False if a connection was already open (caller must leave it open).
+        """
+        if self.conn is None:
+            self.connect()
+            return True
+        return False
+
     def migrate(self) -> list[str]:
+        """Apply pending migrations and return their filenames."""
         if self.conn is None:
             self.connect()
         logger.info("Migrating database...")
@@ -57,6 +71,7 @@ class SQLiteConnection:
         return [p.name for p in pending]
 
     def disconnect(self) -> None:
+        """Close the cursor and connection, if open."""
         if self.cursor is not None:
             self.cursor.close()
         if self.conn is not None:
@@ -136,7 +151,20 @@ class SQLiteConnection:
             raise
 
     def transaction(self, func: Callable[[], Any]) -> Any:
-        self.connect()
+        """Run ``func`` inside BEGIN/COMMIT (ROLLBACK on error).
+
+        Always disconnects when finished. Safe to call helpers like
+        ``insert`` / ``first_or_create`` inside ``func`` (they will reuse
+        this connection and not close it). Do not nest ``transaction``
+        calls — the inner one would disconnect before the outer finishes.
+
+        Args:
+            func: Zero-arg callable that performs DB work.
+
+        Returns:
+            Whatever ``func`` returns.
+        """
+        self._ensure_connection()
         self.conn.execute("BEGIN")
         try:
             result = func()
@@ -149,13 +177,48 @@ class SQLiteConnection:
             self.disconnect()
 
     def insert(self, table: str, data: dict[str, Any]) -> int:
+        """Insert one row.
+
+        Opens a connection if needed and closes it only when this call
+        opened it (so it can run inside ``transaction``).
+
+        Args:
+            table: Table name.
+            data: Column → value map for the INSERT.
+
+        Returns:
+            ``lastrowid`` of the inserted row.
+        """
+        opened = self._ensure_connection()
         assert self.cursor is not None
-        query = (
-            f"INSERT INTO {table} ({', '.join(data.keys())}) "
-            f"VALUES ({', '.join(['?' for _ in data.keys()])})"
-        )
-        self.cursor.execute(query, tuple(data.values()))
-        return self.cursor.lastrowid
+
+        try:
+            query = (
+                f"INSERT INTO {table} ({', '.join(data.keys())}) "
+                f"VALUES ({', '.join(['?' for _ in data.keys()])})"
+            )
+            self.cursor.execute(query, tuple(data.values()))
+            return self.cursor.lastrowid
+        finally:
+            if opened:
+                self.disconnect()
+
+    def delete(self, table: str, data: dict[str, Any]) -> None:
+        """Delete rows matching all key/value pairs in ``data`` (AND).
+
+        Prefer identifying rows by primary key (e.g. ``{"id": image_id}``).
+
+        Opens/closes the connection the same way as ``insert``.
+        """
+        opened = self._ensure_connection()
+        assert self.cursor is not None
+
+        try:
+            query = f"DELETE FROM {table} WHERE {' AND '.join(f'{k} = ?' for k in data.keys())}"
+            self.cursor.execute(query, tuple(data.values()))
+        finally:
+            if opened:
+                self.disconnect()
 
     def first_or_create(
         self,
@@ -165,40 +228,112 @@ class SQLiteConnection:
         conflict_columns: str | list[str],
         id_column: str = "id",
     ) -> int:
-        """Insert a row; on unique conflict, return the existing row id.
+        """Insert a row, or return the existing id on unique conflict.
 
-        conflict_columns must be keys in data and match a UNIQUE / PK target.
-        On conflict, existing non-key columns are left unchanged (first writer wins).
+        ``conflict_columns`` must be keys in ``data`` and match a UNIQUE / PK
+        target. On conflict, existing non-key columns are left unchanged
+        (first writer wins).
+
+        Opens/closes the connection the same way as ``insert``.
         """
+        opened = self._ensure_connection()
         assert self.cursor is not None
-        cols = list(data.keys())
-        conflict = (
-            [conflict_columns]
-            if isinstance(conflict_columns, str)
-            else list(conflict_columns)
-        )
-        missing = [c for c in conflict if c not in data]
-        if missing:
-            raise ValueError(
-                f"conflict_columns not present in data: {missing}"
+
+        try:
+            cols = list(data.keys())
+            conflict = (
+                [conflict_columns]
+                if isinstance(conflict_columns, str)
+                else list(conflict_columns)
+            )
+            missing = [c for c in conflict if c not in data]
+            if missing:
+                raise ValueError(f"conflict_columns not present in data: {missing}")
+
+            placeholders = ", ".join("?" for _ in cols)
+            conflict_list = ", ".join(conflict)
+            self.cursor.execute(
+                f"INSERT INTO {table} ({', '.join(cols)}) "
+                f"VALUES ({placeholders}) "
+                f"ON CONFLICT({conflict_list}) DO NOTHING",
+                tuple(data[c] for c in cols),
+            )
+            where = " AND ".join(f"{c} = ?" for c in conflict)
+            row = self.cursor.execute(
+                f"SELECT {id_column} FROM {table} WHERE {where}",
+                tuple(data[c] for c in conflict),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError(
+                    f"first_or_create failed to find row in {table} "
+                    f"after insert/conflict on {conflict}"
+                )
+            return int(row[id_column])
+        finally:
+            if opened:
+                self.disconnect()
+
+    def create_or_update(
+        self,
+        table: str,
+        data: dict[str, Any],
+        conflict_columns: str | list[str],
+        operations: dict[str, str],
+    ) -> int:
+        """Insert a row, or update it on unique conflict (upsert).
+
+        ``data`` is the INSERT payload. ``conflict_columns`` must match a
+        UNIQUE / PK target (string or list).
+
+        ``operations`` maps column → conflict-only action:
+            - ``INCREMENT`` / ``DECREMENT``: mutate the existing row value
+            - ``IGNORE``: leave the existing value unchanged
+            - ``NOW``: set ``CURRENT_TIMESTAMP``
+
+        Columns present in ``data`` but omitted from ``operations`` are
+        replaced with the new insert values (``excluded.col``). Columns may
+        appear only in ``operations`` (e.g. counters/timestamps that use
+        table defaults on first insert).
+
+        Opens/closes the connection the same way as ``insert``.
+
+        Returns:
+            SQLite ``lastrowid`` after the statement (reliable for inserts;
+            do not rely on it to identify an updated row).
+        """
+        opened = self._ensure_connection()
+        assert self.cursor is not None
+
+        if isinstance(conflict_columns, str):
+            conflict_columns = [conflict_columns]
+
+        try:
+            on_conflict_columns = []
+            for column, operation in operations.items():
+                if operation == "INCREMENT":
+                    on_conflict_columns.append(f"{column} = {column} + 1")
+                elif operation == "DECREMENT":
+                    on_conflict_columns.append(f"{column} = {column} - 1")
+                elif operation == "IGNORE":
+                    pass
+                elif operation == "NOW":
+                    on_conflict_columns.append(f"{column} = CURRENT_TIMESTAMP")
+                else:
+                    raise ValueError(f"Invalid operation: {operation}")
+
+            # Columns in data with no explicit op: overwrite from the insert row.
+            for column in data.keys():
+                if column not in operations.keys():
+                    on_conflict_columns.append(f"{column} = excluded.{column}")
+
+            query = (
+                f"INSERT INTO {table} ({', '.join(data.keys())}) "
+                f"VALUES ({', '.join(['?' for _ in data.keys()])}) "
+                f"ON CONFLICT({', '.join(conflict_columns)}) DO UPDATE SET {', '.join(on_conflict_columns)}"
             )
 
-        placeholders = ", ".join("?" for _ in cols)
-        conflict_list = ", ".join(conflict)
-        self.cursor.execute(
-            f"INSERT INTO {table} ({', '.join(cols)}) "
-            f"VALUES ({placeholders}) "
-            f"ON CONFLICT({conflict_list}) DO NOTHING",
-            tuple(data[c] for c in cols),
-        )
-        where = " AND ".join(f"{c} = ?" for c in conflict)
-        row = self.cursor.execute(
-            f"SELECT {id_column} FROM {table} WHERE {where}",
-            tuple(data[c] for c in conflict),
-        ).fetchone()
-        if row is None:
-            raise RuntimeError(
-                f"first_or_create failed to find row in {table} "
-                f"after insert/conflict on {conflict}"
-            )
-        return int(row[id_column])
+            self.cursor.execute(query, tuple(data.values()))
+            return self.cursor.lastrowid
+        finally:
+            if opened:
+                self.disconnect()

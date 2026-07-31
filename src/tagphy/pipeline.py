@@ -36,29 +36,32 @@ class ImageProcessingPipeline:
             workdir: The destination root directory to store the images.
         """
 
+        self.db = SQLiteConnection()
         self.workdir = Path(workdir or (app_root() / DEFAULT_OUTPUT_DIR_NAME)).resolve()
         self.image_metadata = ImageMetadata()
         self.image_vision = GeminiVisionEngine()
-        self.image_storage = ImageStorage(
-            workdir=str(self.workdir), db=SQLiteConnection()
-        )
+        self.image_storage = ImageStorage(workdir=str(self.workdir), db=self.db)
 
     def run(self, path: str | Path):
         """Run the image processing pipeline on a single image or a directory of images.
 
         Args:
-            path: The path to the image or directory of images to process.
+            path: The absolute path to the image or directory of images to process.
         """
         target = Path(path).resolve()
         output_key = os.path.normcase(str(self.workdir))
         target_key = os.path.normcase(str(target))
 
         if target_key == output_key or target_key.startswith(output_key + os.sep):
-            return self._failure(
-                path,
-                "validate_path",
-                ValueError("Target is the output directory or inside it"),
-            )
+            # Choose not to enter _failure DB Write. Because out of scope image cannot be processed.
+            # _failure is for internal error handling not for use-case level rejection
+            logger.error("Target is the output directory or inside it")
+            return {
+                "status": "fail",
+                "stage": "run",
+                "image": target.name,
+                "error": "Target is the output directory or inside it",
+            }
 
         if target.is_dir():
             return self._run_directory(target)
@@ -120,7 +123,7 @@ class ImageProcessingPipeline:
                     counts["failed"] += 1
                     continue
 
-                if isinstance(result, dict) and result.get("success") == "fail":
+                if isinstance(result, dict) and result.get("status") == "fail":
                     counts["failed"] += 1
                 elif isinstance(result, dict) and result.get("warning"):
                     counts["skipped"] += 1
@@ -184,12 +187,37 @@ class ImageProcessingPipeline:
             error: The error that occurred.
         """
 
+        try:
+            relative_path = (
+                Path(image_path).resolve().relative_to(app_root()).as_posix()
+            )
+        except Exception as e:
+            logger.error(f"Image is outside of Drive at {image_path}. Skip logging")
+            return {
+                "status": "fail",
+                "stage": stage,
+                "image": Path(image_path).name,
+                "error": "Image is outside of Drive",
+            }
         file_name = Path(image_path).name
 
         logger.error(f"Image Processing Pipeline failed at {stage}: {error}")
 
+        self.db.create_or_update(
+            table="failure_log",
+            data={
+                "source_path": relative_path,
+                "file_name": file_name,
+                "stage": stage,
+                "error_type": error.__class__.__name__,
+                "error_message": f"Image Processing Pipeline failed at {stage}: {error}",
+            },
+            conflict_columns="source_path",
+            operations={"attempts": "INCREMENT", "last_seen_at": "NOW"},
+        )
+
         return {
-            "success": "fail",
+            "status": "fail",
             "stage": stage,
             "image": file_name,
         }
@@ -201,5 +229,5 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(message)s",
     )
     pipeline = ImageProcessingPipeline()
-    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/IMG_5139.HEIC")
+    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/test.png")
     print(result)

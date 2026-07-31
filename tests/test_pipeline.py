@@ -79,7 +79,7 @@ class TestPipelineHardStop:
 
         result = pipeline.run(path)
 
-        assert result["success"] == "fail"
+        assert result["status"] == "fail"
         assert result["stage"] == "extract_metadata"
         assert result["image"] == "broken.jpg"
         vision.tag_image.assert_not_called()
@@ -93,7 +93,7 @@ class TestPipelineHardStop:
 
         result = pipeline.run(path)
 
-        assert result["success"] == "fail"
+        assert result["status"] == "fail"
         assert result["stage"] == "tag_image"
         assert result["image"] == "photo.jpg"
         storage.store_image.assert_not_called()
@@ -110,7 +110,7 @@ class TestPipelineHardStop:
 
         result = pipeline.run(path)
 
-        assert result["success"] == "fail"
+        assert result["status"] == "fail"
         assert result["stage"] == "store_image"
         assert result["image"] == "photo.jpg"
 
@@ -138,7 +138,9 @@ class TestDirectoryScan:
             "failed": 0,
             "skipped": 0,
         }
-        called = {Path(c.args[0]).resolve() for c in meta.extract_metadata.call_args_list}
+        called = {
+            Path(c.args[0]).resolve() for c in meta.extract_metadata.call_args_list
+        }
         assert called == {a.resolve(), b.resolve()}
         assert meta.extract_metadata.call_count == 2
 
@@ -166,7 +168,9 @@ class TestDirectoryScan:
 
         assert result["total"] == 4
         assert result["succeeded"] == 4
-        called = {Path(c.args[0]).resolve() for c in meta.extract_metadata.call_args_list}
+        called = {
+            Path(c.args[0]).resolve() for c in meta.extract_metadata.call_args_list
+        }
         assert called == {p.resolve() for p in kept}
 
     def test_prunes_output_dir_sibling_under_scan_root(self, tmp_path):
@@ -189,7 +193,9 @@ class TestDirectoryScan:
         assert result["total"] == 1
         assert result["succeeded"] == 1
         assert meta.extract_metadata.call_count == 1
-        assert Path(meta.extract_metadata.call_args.args[0]).resolve() == new_img.resolve()
+        assert (
+            Path(meta.extract_metadata.call_args.args[0]).resolve() == new_img.resolve()
+        )
         for call in meta.extract_metadata.call_args_list:
             assert "Photo_Tagged" not in Path(call.args[0]).parts
 
@@ -221,7 +227,7 @@ class TestDirectoryScan:
 
         result = pipeline.run(workdir)
 
-        assert result["success"] == "fail"
+        assert result["status"] == "fail"
         assert result["stage"] == "validate_path"
         meta.extract_metadata.assert_not_called()
         vision.tag_image.assert_not_called()
@@ -237,7 +243,7 @@ class TestDirectoryScan:
 
         result = pipeline.run(nested)
 
-        assert result["success"] == "fail"
+        assert result["status"] == "fail"
         assert result["stage"] == "validate_path"
         meta.extract_metadata.assert_not_called()
         storage.store_image.assert_not_called()
@@ -392,8 +398,7 @@ class TestDirectoryScanProgress:
             pipeline.run(scan_root)
 
         assert any(
-            "Starting directory scan" in record.message
-            and "inbox" in record.message
+            "Starting directory scan" in record.message and "inbox" in record.message
             for record in caplog.records
         )
 

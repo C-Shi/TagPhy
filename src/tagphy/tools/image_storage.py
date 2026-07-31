@@ -20,6 +20,9 @@ class ImageStorage:
     def store_image(
         self, image_path: str, metadata: dict[str, str], tags: dict[str, str]
     ) -> dict[str, Any]:
+
+        # A variable to track the stage of the image storage process. Mainly for catch where the error happens
+        stage = "BEGIN"
         year = metadata.get("year") or "Unknown"
 
         tags_db = [*tags.values()]
@@ -41,18 +44,24 @@ class ImageStorage:
                 "warning": "File already exists. No action taken",
             }
 
+        stage = "CREATE_DESTINATION_FOLDER"
         os.makedirs(destination_folder, exist_ok=True)
 
         try:
-            self._update_db_record(destination_path, metadata, tags_db)
+            stage = "DB_WRITE"
+            image_id = self._update_db_record(destination_path, metadata, tags_db)
+            stage = "FILE_MOVE"
             move(image_path, destination_path)
+            stage = "DONE"
             return {
                 "destination_path": destination_path,
                 "tags": tags_db,
                 "metadata": metadata,
             }
         except Exception as e:
-            self._log_file_move_error(image_path, destination_path, e)
+            if stage == "FILE_MOVE":
+                # IF stage is FILE_MOVE, image_id is guaranteed to be valid
+                self.db.delete("images", {"id": image_id})
             raise e
 
     def _update_db_record(
@@ -90,10 +99,7 @@ class ImageStorage:
                         "source": source,
                     },
                 )
+            # return image_id to the caller to use for the next step
+            return image_id
 
-        self.db.transaction(insert_record)
-
-    def _log_file_move_error(
-        self, image_path: str, destination_path: str, error: Exception
-    ):
-        pass
+        return self.db.transaction(insert_record)
