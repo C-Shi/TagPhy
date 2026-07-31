@@ -38,11 +38,11 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
    1d. After each chunk, repeat 1b–1c until no images remain in the target directory.
    1e. Path must not be `Photo_Tagged/` (that folder is the output of processing).
 
-2. (Optional) Multi-thread or multi-process so multiple chunks can run in parallel.
+2. (Optional) Multi-thread or multi-process so multiple chunks can run in parallel. **Deferred** — revisit after Stage Four (DB writes) and Stage Seven task 2 (naming conflicts). Concurrency before durable persistence and atomic collision handling adds race conditions on move + DB write, risks Gemini rate limits, and the shared vision client is not verified thread-safe. Revisit only when measured Gemini latency makes large scans impractical; then use a small bounded thread pool with rate limiting and a single serialized DB writer.
 
 ### Stage Four: Database Integration
 
-1. Database ERD + DDL: tables for image info (file path, metadata, tags); failure-log table for processed-but-untagged files (for human follow-up); tags as a DAG (multi-parent allowed); include migrations.
+1. Database ERD + DDL: tables for image info (file path, metadata, tags); failure-log table for processed-but-untagged files (for human follow-up); tags as a DAG (multi-parent allowed); include migrations. Design detail and locked decisions live in `.cursor/rules/stage-four-database-plan.mdc` (plan only, not implemented).
 2. Migration runner: on app/web-server start, always run pending migrations.
 3. Integrate DB writes into the storage function.
    3a. Write to DB only after the file move succeeds. Treat move + DB update as one logical unit (custom approach to minimize inconsistency risk).
@@ -82,4 +82,4 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 ## Status
 
-Stage Two complete. Currently at Stage Three, task 1 (multi-directory / multi-file facilitator) done; optional concurrency (task 2) not started.
+Stage Two complete. Stage Three task 1 (multi-directory / multi-file facilitator) done; task 2 (concurrency) deferred by decision. Next: Stage Four task 1 (database ERD + DDL).

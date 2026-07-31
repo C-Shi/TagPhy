@@ -1,10 +1,9 @@
-import logging
-import os
-import time
+import logging, os, time
 from logging import getLogger
 from pathlib import Path
 
 from PIL import Image
+from tagphy import app_root
 from tagphy.tools import GeminiVisionEngine, ImageMetadata, ImageStorage
 
 logger = getLogger(__name__)
@@ -35,7 +34,7 @@ class ImageProcessingPipeline:
         Args:
             workdir: The destination root directory to store the images.
         """
-        self.workdir = Path(workdir or (Path.cwd() / DEFAULT_OUTPUT_DIR_NAME)).resolve()
+        self.workdir = Path(workdir or (app_root() / DEFAULT_OUTPUT_DIR_NAME)).resolve()
         self.image_metadata = ImageMetadata()
         self.image_vision = GeminiVisionEngine()
         self.image_storage = ImageStorage(workdir=str(self.workdir))

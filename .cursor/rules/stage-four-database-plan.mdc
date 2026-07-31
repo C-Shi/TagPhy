@@ -1,0 +1,230 @@
+---
+description: >-
+  TagPhy Stage Four database design plan (ERD, DDL, path anchor, migrations).
+  Use when working on Stage Four tasks or the SQLite catalog schema.
+alwaysApply: false
+---
+
+# Stage Four Plan — Database Integration
+
+Status: **plan only, not implemented.** Living design; challenge before building.
+
+## Scope of task 4.1
+
+Schema only. Deliver an ERD, the DDL as a first migration file, a connection
+helper, and tests. Explicitly **not** in 4.1:
+
+- The migration runner (task 4.2).
+- Wiring writes into `ImageStorage` / `ImageProcessingPipeline` (tasks 4.3, 4.4).
+- Loading existing tags for the vision function (task 4.5).
+
+`ImageStorage._update_db_record` and `_log_file_move_error` stay placeholders
+through 4.1.
+
+## Decisions locked
+
+1. **Tag names are case-sensitive.** `UNIQUE (name)` with SQLite's default
+   BINARY collation, so `Cat` and `cat` are separate rows. The vision prompt
+   already requests lowercase singular nouns, and the Stage Six merge/rename
+   tool is the cleanup path. Ship a helper query listing tags that differ only
+   by case so the assistant can surface them.
+2. **Year and location are both columns and tags.** `image.year` and
+   `image.location` are authoritative metadata; matching `tag` rows carry
+   `source = 'year'` / `'location'` so the GUI tag tree can filter on them.
+   This matches what `ImageStorage.store_image` already does when it appends
+   both to `tags_db`.
+3. **Path anchor is the app root**, resolved once and shared (see below).
+   Scan targets outside the anchor are rejected via the existing
+   `validate_path` failure stage; never store `..` segments in the DB.
+4. **`failure_log` is keyed by path and upserted** — one row per file with an
+   attempt counter, no history.
+
+## Path anchor
+
+Replaces today's implicit `Path.cwd()` anchor in `pipeline.py`, which breaks for
+a double-clicked app (macOS gives cwd `/`).
+
+```python
+def app_root() -> Path:
+    if override := os.environ.get("TAGPHY_ROOT"):
+        return Path(override).resolve()
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent      # USB folder holding the app
+    for parent in Path(__file__).resolve().parents:       # dev: repo root by sentinel
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("Cannot determine TagPhy root; set TAGPHY_ROOT")
+```
+
+- Frozen builds: PyInstaller sets `sys.frozen`, and for onefile `sys.executable`
+  is the real binary path on the drive (not `sys._MEIPASS`), so its parent is
+  the app root.
+- Development: no executable exists and `sys.executable` is the venv Python, so
+  fall back to a `pyproject.toml` sentinel search rather than a brittle
+  `parents[N]` index. Resolves to the repo root.
+- `TAGPHY_ROOT` lets dev rehearse the USB layout and lets tests anchor at
+  `tmp_path` without freezing a binary.
+
+Consequences:
+
+- The catalog lives at `<app_root>/tagphy.db` so it travels with the drive.
+  Already covered by the `*.db` gitignore rule.
+- Stored paths are `Path(p).relative_to(app_root).as_posix()` — POSIX
+  separators for cross-platform portability.
+- Drive root and app root coincide only when TagPhy sits at the top of the USB
+  (the layout in project-info). Nested installs must set `TAGPHY_ROOT`.
+- Deriving the mount point unconditionally was rejected: in dev the containing
+  volume is `/`, which would store every path relative to the filesystem root.
+- Task 4.3 must change `pipeline.py` to take its workdir from `app_root()`
+  instead of `Path.cwd()`, and convert `store_image`'s absolute
+  `destination_path` to a relative path before writing.
+
+## DDL
+
+```sql
+CREATE TABLE schema_migrations (
+    version     TEXT PRIMARY KEY,
+    applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE image (
+    id            INTEGER PRIMARY KEY,
+    relative_path TEXT    NOT NULL UNIQUE,   -- 'Photo_Tagged/2024/IMG_001.JPG'
+    file_name     TEXT    NOT NULL,
+    year          TEXT,                      -- NULL when EXIF gave nothing -> Unknown/
+    location      TEXT,                      -- 'Calgary, CA' or NULL
+    description   TEXT,                      -- reserved for Stage 5.5 / later vision
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE tag (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT    NOT NULL UNIQUE,          -- case-sensitive by decision 1
+    source      TEXT    NOT NULL DEFAULT 'vision',-- vision | year | location | manual
+    description TEXT,                             -- shown by Stage 5.3
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE image_tag (
+    image_id   INTEGER NOT NULL REFERENCES image(id) ON DELETE CASCADE,
+    tag_id     INTEGER NOT NULL REFERENCES tag(id)   ON DELETE CASCADE,
+    source     TEXT    NOT NULL DEFAULT 'vision',
+    confidence REAL,                              -- NULL until vision reports one
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (image_id, tag_id)
+);
+
+CREATE TABLE tag_edge (                           -- DAG, multi-parent allowed
+    parent_id INTEGER NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+    child_id  INTEGER NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+    PRIMARY KEY (parent_id, child_id),
+    CHECK (parent_id <> child_id)
+);
+
+CREATE TABLE failure_log (
+    relative_path TEXT PRIMARY KEY,               -- source path; file was NOT moved
+    file_name     TEXT    NOT NULL,
+    stage         TEXT    NOT NULL,               -- matches pipeline._failure stages
+    error_type    TEXT,
+    error_message TEXT,
+    attempts      INTEGER NOT NULL DEFAULT 1,
+    first_seen_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_seen_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    resolved_at   TEXT
+);
+
+CREATE INDEX idx_image_tag_tag   ON image_tag (tag_id);
+CREATE INDEX idx_tag_edge_child  ON tag_edge (child_id);
+CREATE INDEX idx_image_year      ON image (year);
+CREATE INDEX idx_failure_open    ON failure_log (resolved_at);
+```
+
+`failure_log.stage` reuses the exact strings `pipeline._failure` already emits
+(`validate_path`, `extract_metadata`, `tag_image`, `store_image`), so task 4.4
+is a direct insert with no translation layer.
+
+Failure upsert:
+
+```sql
+INSERT INTO failure_log (relative_path, file_name, stage, error_type, error_message)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(relative_path) DO UPDATE SET
+    stage         = excluded.stage,
+    error_type    = excluded.error_type,
+    error_message = excluded.error_message,
+    attempts      = attempts + 1,
+    last_seen_at  = datetime('now'),
+    resolved_at   = NULL;
+```
+
+Open item for 4.4: a failure row keys on the file's *source* path, so a later
+successful retry moves the file and orphans the row. The pipeline should clear
+it on success — leaning toward deleting the row rather than setting
+`resolved_at`, since a resolved failure has no audit value once catalogued.
+
+## DAG descendant resolution
+
+Powers the Stage Five tag tree filter, so `animal` returns photos tagged `cat`.
+
+```sql
+WITH RECURSIVE descendants(id) AS (
+    SELECT :tag_id
+    UNION                              -- UNION, not UNION ALL: prunes diamond re-visits
+    SELECT e.child_id FROM tag_edge e JOIN descendants d ON e.parent_id = d.id
+)
+SELECT DISTINCT i.* FROM image i
+JOIN image_tag it ON it.image_id = i.id
+WHERE it.tag_id IN (SELECT id FROM descendants);
+```
+
+`UNION` (not `UNION ALL`) keeps a multi-parent diamond — Meowy to both Cat and
+Pet, both to Animal — from expanding exponentially. The `CHECK` blocks
+self-loops, but SQLite cannot prevent longer cycles, so inserting an edge needs
+an app-level guard that the proposed parent is not already a descendant of the
+child. That guard belongs in the tag-edge helper, not the DDL.
+
+## Connection settings
+
+- `PRAGMA foreign_keys = ON` on every connection. SQLite defaults it off and
+  the cascades above are load-bearing.
+- `journal_mode = DELETE` rather than WAL. WAL needs a shared-memory file,
+  which is unreliable on exFAT/FAT32 USB sticks and broken over network mounts.
+  With Stage 3.2 deferred there is a single writer, so WAL buys little.
+
+## Deferred
+
+- Content hash for duplicate detection: belongs with Stage 7.2. Adding it now
+  means hashing every file with no consumer.
+- `device` column: project-info mentions EXIF device, but `ImageMetadata` does
+  not extract it. Add the column when the metadata function returns it.
+- Embedding / vector storage for few-shot entities: Stage Eight.
+
+## Proposed file layout
+
+```
+src/tagphy/db/
+├── __init__.py          # exports connect(), app_root(), MIGRATIONS_DIR
+├── connection.py        # sqlite3 connect + PRAGMAs + row_factory
+├── schema.md            # ERD (mermaid) + column rationale
+└── migrations/
+    └── 0001_initial.sql
+```
+
+Forward-only numbered `.sql` files applied in filename order, tracked in
+`schema_migrations`. Plain `sqlite3`, no ORM and no Alembic — keeps the
+portable-binary story simple and matches the plain-functions principle.
+
+## Test plan for 4.1
+
+1. `0001_initial.sql` applies to an empty DB and creates all six tables.
+2. Applying it twice is safe / correctly reports already-applied.
+3. `app_root()` honours `TAGPHY_ROOT`, and finds the repo root in dev.
+4. Path round-trip: absolute path to relative POSIX string and back.
+5. `UNIQUE (name)` permits `Cat` and `cat`; rejects an exact duplicate.
+6. `image.relative_path` uniqueness rejects a duplicate insert.
+7. `ON DELETE CASCADE` clears `image_tag` rows when an image is deleted.
+8. Recursive CTE resolves a three-level chain and a multi-parent diamond
+   without duplicate rows.
+9. `CHECK (parent_id <> child_id)` rejects a self-edge.
+10. Failure upsert increments `attempts` and refreshes `last_seen_at`.
