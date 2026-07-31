@@ -1,9 +1,19 @@
 """Local web UI entrypoint — fill in later."""
 
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 import uvicorn
+from tagphy.db.connection import SQLiteConnection
 
-app = FastAPI(title="TagPhy")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = SQLiteConnection()
+    db.migrate()
+    yield
+
+
+app = FastAPI(title="TagPhy", lifespan=lifespan)
 
 
 @app.get("/")

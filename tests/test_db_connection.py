@@ -25,7 +25,7 @@ EXPECTED_TABLES = {
 
 def _conn(tmp_path: Path, migrations_dir: Path | None = None) -> SQLiteConnection:
     return SQLiteConnection(
-        db_path=tmp_path / "tagphy.db",
+        db_path=tmp_path / "tagphy_test.db",
         migrations_dir=migrations_dir or MIGRATIONS_DIR,
     )
 
@@ -37,12 +37,24 @@ def _table_names(conn: sqlite3.Connection) -> set[str]:
     return {row[0] for row in rows}
 
 
+def _reopen(db: SQLiteConnection) -> None:
+    """Reconnect after migrate(), which closes the connection on success."""
+    db.connect()
+
+
 class TestFreshMigrate:
+    def test_migrate_closes_connection(self, tmp_path):
+        db = _conn(tmp_path)
+        db.migrate()
+        assert db.conn is None
+        assert db.cursor is None
+
     def test_creates_all_tables_and_returns_version(self, tmp_path):
         db = _conn(tmp_path)
         applied = db.migrate()
 
         assert applied == ["001_create_table.sql"]
+        _reopen(db)
         assert EXPECTED_TABLES.issubset(_table_names(db.conn))
         db.disconnect()
 
@@ -50,6 +62,7 @@ class TestFreshMigrate:
         db = _conn(tmp_path)
         db.migrate()
 
+        _reopen(db)
         row = db.conn.execute(
             "SELECT version, applied_at FROM schema_migrations"
         ).fetchone()
@@ -64,9 +77,8 @@ class TestFreshMigrate:
 
         assert first == ["001_create_table.sql"]
         assert second == []
-        count = db.conn.execute(
-            "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone()[0]
+        _reopen(db)
+        count = db.conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
         assert count == 1
         db.disconnect()
 
@@ -75,7 +87,10 @@ class TestOrderingAndPartialApply:
     def test_applies_pending_file_in_order(self, tmp_path):
         migrations = tmp_path / "migrations"
         migrations.mkdir()
-        shutil.copy(MIGRATIONS_DIR / "001_create_table.sql", migrations / "001_create_table.sql")
+        shutil.copy(
+            MIGRATIONS_DIR / "001_create_table.sql",
+            migrations / "001_create_table.sql",
+        )
         (migrations / "002_add_note.sql").write_text(
             "ALTER TABLE images ADD COLUMN note TEXT;\n",
             encoding="utf-8",
@@ -86,7 +101,6 @@ class TestOrderingAndPartialApply:
         assert first == ["001_create_table.sql", "002_add_note.sql"]
 
         # Simulate a database that already applied 001 only.
-        db.disconnect()
         fresh = tmp_path / "partial.db"
         partial = SQLiteConnection(db_path=fresh, migrations_dir=migrations)
         partial.connect()
@@ -103,6 +117,8 @@ class TestOrderingAndPartialApply:
 
         pending = partial.migrate()
         assert pending == ["002_add_note.sql"]
+
+        _reopen(partial)
         cols = {
             row[1]
             for row in partial.conn.execute("PRAGMA table_info(images)").fetchall()
@@ -123,8 +139,7 @@ class TestRollback:
         migrations = tmp_path / "migrations"
         migrations.mkdir()
         (migrations / "001_bad.sql").write_text(
-            "CREATE TABLE keep_me (id INTEGER);\n"
-            "CREATE TABLE ((((invalid;\n",
+            "CREATE TABLE keep_me (id INTEGER);\n" "CREATE TABLE ((((invalid;\n",
             encoding="utf-8",
         )
 
@@ -132,10 +147,10 @@ class TestRollback:
         with pytest.raises(sqlite3.Error):
             db.migrate()
 
+        # Failure aborts before migrate()'s success-path disconnect.
+        assert db.conn is not None
         assert "keep_me" not in _table_names(db.conn)
-        versions = db.conn.execute(
-            "SELECT version FROM schema_migrations"
-        ).fetchall()
+        versions = db.conn.execute("SELECT version FROM schema_migrations").fetchall()
         assert versions == []
         db.disconnect()
 
@@ -144,7 +159,10 @@ class TestDiscoveryWarnings:
     def test_ignores_badly_named_files(self, tmp_path, caplog):
         migrations = tmp_path / "migrations"
         migrations.mkdir()
-        shutil.copy(MIGRATIONS_DIR / "001_create_table.sql", migrations / "001_create_table.sql")
+        shutil.copy(
+            MIGRATIONS_DIR / "001_create_table.sql",
+            migrations / "001_create_table.sql",
+        )
         (migrations / "notes.sql").write_text(
             "CREATE TABLE should_not_exist (id INTEGER);\n",
             encoding="utf-8",
@@ -155,6 +173,7 @@ class TestDiscoveryWarnings:
             applied = db.migrate()
 
         assert applied == ["001_create_table.sql"]
+        _reopen(db)
         assert "should_not_exist" not in _table_names(db.conn)
         assert any("notes.sql" in r.message for r in caplog.records)
         db.disconnect()
@@ -167,26 +186,36 @@ class TestPragmasAndConstraints:
         assert db.conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         db.disconnect()
 
-    def test_year_nullable_and_file_path_unique(self, tmp_path):
+    def test_year_required_and_file_path_unique(self, tmp_path):
+        """images.year is NOT NULL in 001_create_table.sql; file_path is UNIQUE."""
         db = _conn(tmp_path)
         db.migrate()
+        _reopen(db)
 
-        db.conn.execute(
-            "INSERT INTO images (file_path, file_name, year, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            ("Photo_Tagged/Unknown/a.jpg", "a.jpg", None, "t", "t"),
-        )
         with pytest.raises(sqlite3.IntegrityError):
             db.conn.execute(
                 "INSERT INTO images (file_path, file_name, year, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?)",
                 ("Photo_Tagged/Unknown/a.jpg", "a.jpg", None, "t", "t"),
             )
+
+        db.conn.execute(
+            "INSERT INTO images (file_path, file_name, year, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("Photo_Tagged/Unknown/a.jpg", "a.jpg", "Unknown", "t", "t"),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            db.conn.execute(
+                "INSERT INTO images (file_path, file_name, year, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                ("Photo_Tagged/Unknown/a.jpg", "a.jpg", "Unknown", "t", "t"),
+            )
         db.disconnect()
 
     def test_delete_image_cascades_image_tags(self, tmp_path):
         db = _conn(tmp_path)
         db.migrate()
+        _reopen(db)
 
         db.conn.execute(
             "INSERT INTO images (file_path, file_name, year, created_at, updated_at) "
@@ -210,6 +239,7 @@ class TestPragmasAndConstraints:
     def test_self_edge_rejected(self, tmp_path):
         db = _conn(tmp_path)
         db.migrate()
+        _reopen(db)
         db.conn.execute(
             "INSERT INTO tags (name, source, created_at) VALUES (?, ?, ?)",
             ("cat", "vision", "t"),
@@ -224,6 +254,7 @@ class TestPragmasAndConstraints:
     def test_descendant_cte_chain_and_diamond(self, tmp_path):
         db = _conn(tmp_path)
         db.migrate()
+        _reopen(db)
 
         for name in ("animal", "pet", "mammal", "cat", "Meowy"):
             db.conn.execute(
@@ -306,7 +337,7 @@ class TestAppRootDefault:
     def test_migrate_writes_only_under_sandboxed_root(self, isolate_app_root):
         db = SQLiteConnection()
         db.migrate()
-        db.disconnect()
 
+        assert db.conn is None
         assert (isolate_app_root / "tagphy.db").is_file()
         assert not (REPO_ROOT / "tagphy.db").exists()

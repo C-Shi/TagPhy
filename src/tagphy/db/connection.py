@@ -28,9 +28,7 @@ class SQLiteConnection:
         migrations_dir: str | Path | None = None,
     ):
         self.db_path = Path(db_path) if db_path else app_root() / "tagphy.db"
-        self.migrations_dir = (
-            Path(migrations_dir) if migrations_dir else MIGRATIONS_DIR
-        )
+        self.migrations_dir = Path(migrations_dir) if migrations_dir else MIGRATIONS_DIR
         self.conn: sqlite3.Connection | None = None
         self.cursor: sqlite3.Cursor | None = None
 
@@ -44,6 +42,7 @@ class SQLiteConnection:
     def migrate(self) -> list[str]:
         if self.conn is None:
             self.connect()
+        logger.info("Migrating database...")
         self._ensure_migrations_table()
         applied = self._applied_versions()
         discovered = self._discover_migrations()
@@ -51,6 +50,9 @@ class SQLiteConnection:
         pending = [p for p in discovered if p.name not in applied]
         for path in pending:
             self._apply_migration(path)
+
+        self.disconnect()
+        logger.info("Database migrated successfully")
         return [p.name for p in pending]
 
     def disconnect(self) -> None:
@@ -86,9 +88,7 @@ class SQLiteConnection:
                 )
         return discovered
 
-    def _warn_orphan_versions(
-        self, applied: set[str], discovered: list[Path]
-    ) -> None:
+    def _warn_orphan_versions(self, applied: set[str], discovered: list[Path]) -> None:
         discovered_names = {p.name for p in discovered}
         for version in sorted(applied - discovered_names):
             logger.warning(
