@@ -176,6 +176,24 @@ class SQLiteConnection:
         finally:
             self.disconnect()
 
+    def select(self, table: str, columns: list[str], where: dict[str, Any]) -> list[dict[str, Any]]:
+        """Select rows from a table with conditions to precisely query by column.
+
+        Args:
+            table: Table name.
+            columns: List of column names.
+            where: Dictionary of column names and values.
+        """
+        opened = self._ensure_connection()
+        assert self.cursor is not None
+
+        try:
+            query = f"SELECT {', '.join(columns)} FROM {table} WHERE {' AND '.join(f'{k} = ?' for k in where.keys())}"
+            self.cursor.execute(query, tuple(where.values()))
+            return self.cursor.fetchall()
+        finally:
+            if opened:
+                self.disconnect()
     def insert(self, table: str, data: dict[str, Any]) -> int:
         """Insert one row.
 
