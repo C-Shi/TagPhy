@@ -228,6 +228,8 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
+    db = SQLiteConnection()
+    db.migrate()
     pipeline = ImageProcessingPipeline()
-    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/test.png")
+    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/test")
     print(result)

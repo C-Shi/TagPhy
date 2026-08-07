@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS image_tags (
     image_id INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     source TEXT NOT NULL DEFAULT 'vision',
-    confidence REAL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (image_id, tag_id)
 );
