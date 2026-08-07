@@ -1,4 +1,4 @@
-"""Contract tests for Stage 2.2 vision tagging."""
+"""Contract tests for Stage 2.2 / 4.5 vision tagging."""
 
 from abc import ABC
 from unittest.mock import MagicMock, patch
@@ -6,6 +6,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tagphy.tools.image_vision import GeminiVisionEngine, ImageVision
+
+
+def _vision_result(*tags: str, relations: list | None = None) -> dict:
+    return {"tags": list(tags), "tag_relations": relations or []}
 
 
 class TestImageVisionInterface:
@@ -24,16 +28,23 @@ class TestImageVisionInterface:
 
 
 class TestGeminiVisionEngine:
-    def _engine_with_fake_client(self):
-        with patch.object(GeminiVisionEngine, "__init__", lambda self: None):
-            engine = GeminiVisionEngine()
+    def _engine_with_fake_client(self, existing_tags: list | None = None):
+        with patch.object(GeminiVisionEngine, "__init__", lambda self, db=None: None):
+            engine = GeminiVisionEngine(db=MagicMock())
         engine.client = MagicMock()
+        engine.db = MagicMock()
+        rows = [{"name": name} for name in (existing_tags or [])]
+        engine.db.select.return_value = rows
         return engine
 
-    def test_returns_parsed_main_and_secondary_tags(self):
+    def test_returns_parsed_tags_and_relations(self):
         engine = self._engine_with_fake_client()
         engine._get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
-        parsed = {"main_tag": "cat", "secondary_tag": "balcony"}
+        parsed = _vision_result(
+            "cat",
+            "balcony",
+            relations=[{"parent": "animal", "child": "cat"}],
+        )
         response = MagicMock()
         response.parsed = parsed
         engine.client.models.generate_content.return_value = response
@@ -41,27 +52,37 @@ class TestGeminiVisionEngine:
         result = engine.tag_image("photo.jpg")
 
         assert result == parsed
-        assert result["main_tag"] == "cat"
-        assert result["secondary_tag"] == "balcony"
+        assert result["tags"] == ["cat", "balcony"]
+        assert result["tag_relations"] == [{"parent": "animal", "child": "cat"}]
 
-    def test_requests_structured_json_schema_and_jpeg_bytes(self):
-        engine = self._engine_with_fake_client()
+    def test_requests_structured_json_schema_image_and_catalog_text(self):
+        engine = self._engine_with_fake_client(existing_tags=["animal", "cat"])
         engine._get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
         response = MagicMock()
-        response.parsed = {"main_tag": "dog", "secondary_tag": "park"}
+        response.parsed = _vision_result("cat")
         engine.client.models.generate_content.return_value = response
 
         engine.tag_image("photo.jpg")
 
+        engine.db.select.assert_called_once_with(
+            table="tags",
+            columns=["name"],
+            where={"source": "vision"},
+        )
         kwargs = engine.client.models.generate_content.call_args.kwargs
         config = kwargs["config"]
         assert config.response_mime_type == "application/json"
         schema = config.response_schema
-        assert "main_tag" in schema["properties"]
-        assert "secondary_tag" in schema["properties"]
-        assert set(schema["required"]) == {"main_tag", "secondary_tag"}
+        assert "tags" in schema["properties"]
+        assert "tag_relations" in schema["properties"]
+        assert schema["properties"]["tags"]["minItems"] == 1
+        assert schema["properties"]["tags"]["maxItems"] == 3
+        assert set(schema["required"]) == {"tags", "tag_relations"}
         contents = kwargs["contents"]
-        assert len(contents) == 1
+        assert len(contents) == 2
+        catalog_part = contents[1]
+        assert "animal" in catalog_part.text
+        assert "cat" in catalog_part.text
 
     def test_api_failure_propagates(self):
         engine = self._engine_with_fake_client()

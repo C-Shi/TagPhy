@@ -42,30 +42,32 @@ class TestPipelineSuccess:
         pipeline, meta, vision, storage = _pipeline_with_mocks()
         path = "/virtual/inbox/photo.jpg"
         metadata = {"year": "2024", "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
+        vision_response = {"tags": ["cat", "balcony"], "tag_relations": []}
         stored = {
             "destination_path": "/virtual/Photo_Tagged/2024/photo.jpg",
             "tags": ["cat", "balcony", "2024"],
             "metadata": metadata,
         }
         meta.extract_metadata.return_value = metadata
-        vision.tag_image.return_value = tags
+        vision.tag_image.return_value = vision_response
         storage.store_image.return_value = stored
 
         result = pipeline.run(path)
 
         meta.extract_metadata.assert_called_once_with(path)
         vision.tag_image.assert_called_once_with(path)
-        storage.store_image.assert_called_once_with(path, metadata, tags)
+        storage.store_image.assert_called_once_with(
+            path, metadata, vision_response
+        )
         assert result == stored
 
     def test_passes_metadata_and_vision_outputs_to_storage(self):
         pipeline, meta, vision, storage = _pipeline_with_mocks()
         path = "relative/shot.HEIC"
         metadata = {"year": "2022", "location": "Calgary, CA"}
-        tags = {"main_tag": "dog", "secondary_tag": "park"}
+        vision_response = {"tags": ["dog", "park"], "tag_relations": []}
         meta.extract_metadata.return_value = metadata
-        vision.tag_image.return_value = tags
+        vision.tag_image.return_value = vision_response
         storage.store_image.return_value = {"ok": True}
 
         pipeline.run(path)
@@ -73,7 +75,7 @@ class TestPipelineSuccess:
         args = storage.store_image.call_args.args
         assert args[0] == path
         assert args[1] is metadata
-        assert args[2] is tags
+        assert args[2] is vision_response
 
 
 class TestPipelineHardStop:
@@ -108,8 +110,8 @@ class TestPipelineHardStop:
         path = "/virtual/inbox/photo.jpg"
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.side_effect = OSError("move failed")
 
@@ -167,8 +169,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -201,8 +203,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": None, "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -225,8 +227,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -250,8 +252,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -305,8 +307,8 @@ class TestDirectoryScan:
 
         meta.extract_metadata.side_effect = metadata_side_effect
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -353,8 +355,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {
             "destination_path": "x",
@@ -396,8 +398,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -416,8 +418,8 @@ class TestDirectoryScan:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -453,8 +455,8 @@ class TestDirectoryScanProgress:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -474,8 +476,8 @@ class TestDirectoryScanProgress:
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
         meta.extract_metadata.return_value = {"year": "2024", "location": None}
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
@@ -499,8 +501,8 @@ class TestDirectoryScanProgress:
 
         meta.extract_metadata.side_effect = metadata_side_effect
         vision.tag_image.return_value = {
-            "main_tag": "cat",
-            "secondary_tag": "balcony",
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 

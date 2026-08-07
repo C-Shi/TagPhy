@@ -1,7 +1,7 @@
-"""Contract tests for Stage 2.3 / 4.3 / 4.4 storage (MagicMock db only)."""
+"""Contract tests for Stage 2.3 / 4.3 / 4.5 storage (MagicMock db only)."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,6 +29,22 @@ def _run_transaction_callback(func):
     return func()
 
 
+def _vision(*tags: str, relations: list | None = None) -> dict:
+    return {"tags": list(tags), "tag_relations": relations or []}
+
+
+def _db_for_tags(*, image_id: int = 101, tag_ids: list[int] | None = None):
+    db = MagicMock()
+    db.transaction.side_effect = _run_transaction_callback
+    db.query.return_value = []
+    db.select.return_value = []
+    ids = tag_ids or [1, 2, 3]
+    db.first_or_create.side_effect = list(ids)
+    # image insert + one image_tags insert per tag id (+ optional edge inserts)
+    db.insert.side_effect = [image_id] + [None] * (len(ids) + 4)
+    return db
+
+
 class TestStoreImageDestination:
     @_patch_app_root()
     @patch("tagphy.tools.image_storage.move")
@@ -39,9 +55,8 @@ class TestStoreImageDestination:
     ):
         storage = _storage()
         metadata = {"year": "2024", "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
         expected = f"{WORKDIR}/2024/vacation.HEIC"
         mock_makedirs.assert_called_once_with(f"{WORKDIR}/2024", exist_ok=True)
@@ -58,9 +73,8 @@ class TestStoreImageDestination:
     ):
         storage = _storage()
         metadata = {"year": None, "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
         expected = f"{WORKDIR}/Unknown/vacation.HEIC"
         mock_makedirs.assert_called_once_with(
@@ -80,9 +94,8 @@ class TestStoreImageYearTag:
     ):
         storage = _storage()
         metadata = {"year": "2025", "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
         assert "2025" in result["tags"]
         assert "year" not in result["tags"]
@@ -98,9 +111,8 @@ class TestStoreImageYearTag:
     ):
         storage = _storage()
         metadata = {"year": None, "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
         assert "Unknown" not in result["tags"]
         assert not any(
@@ -117,9 +129,8 @@ class TestStoreImageYearTag:
     ):
         storage = _storage()
         metadata = {"year": "2025", "location": "Calgary, CA"}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
         assert "Calgary, CA" not in result["tags"]
 
@@ -133,15 +144,30 @@ class TestStoreImageYearTag:
         """Vision must never invent the year folder; metadata year wins."""
         storage = _storage()
         metadata = {"year": None, "location": None}
-        tags = {"main_tag": "2020", "secondary_tag": "cat"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("2020", "cat"))
 
         mock_makedirs.assert_called_once_with(
             f"{WORKDIR}/Unknown", exist_ok=True
         )
         assert result["destination_path"].startswith(f"{WORKDIR}/Unknown/")
         mock_move.assert_called_once()
+
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_does_not_mutate_vision_tags_list(
+        self, _exists, _makedirs, _move, _app_root
+    ):
+        storage = _storage()
+        metadata = {"year": "2025", "location": None}
+        vision_tags = ["cat"]
+        vision = {"tags": vision_tags, "tag_relations": []}
+
+        storage.store_image(SOURCE, metadata, vision)
+
+        assert vision_tags == ["cat"]
 
 
 class TestStoreImageFailures:
@@ -153,9 +179,8 @@ class TestStoreImageFailures:
     ):
         storage = _storage()
         metadata = {"year": "2024", "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
-        result = storage.store_image(SOURCE, metadata, tags)
+        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
         mock_move.assert_not_called()
         mock_makedirs.assert_not_called()
@@ -171,10 +196,9 @@ class TestStoreImageFailures:
         mock_move.side_effect = OSError("disk full")
         storage = _storage()
         metadata = {"year": "2024", "location": None}
-        tags = {"main_tag": "cat", "secondary_tag": "balcony"}
 
         with pytest.raises(OSError, match="disk full"):
-            storage.store_image(SOURCE, metadata, tags)
+            storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
 
 
 class TestStoreImageDbWrite:
@@ -185,16 +209,11 @@ class TestStoreImageDbWrite:
     def test_writes_relative_path_tags_and_image_tags_via_db_mock(
         self, _exists, _makedirs, _move, _app_root
     ):
-        db = MagicMock()
-        db.transaction.side_effect = _run_transaction_callback
-        db.insert.side_effect = [101, None, None, None]  # image id, then joins
-        db.first_or_create.side_effect = [1, 2, 3]
-
+        db = _db_for_tags(tag_ids=[1, 2, 3])
         storage = _storage(db=db)
         metadata = {"year": "2025", "location": "Calgary, CA"}
-        tags = {"main_tag": "ukulele", "secondary_tag": "instrument"}
 
-        storage.store_image(SOURCE, metadata, tags)
+        storage.store_image(SOURCE, metadata, _vision("ukulele", "instrument"))
 
         db.transaction.assert_called_once()
         image_insert = db.insert.call_args_list[0]
@@ -229,6 +248,8 @@ class TestStoreImageDbWrite:
     ):
         db = MagicMock()
         db.transaction.side_effect = _run_transaction_callback
+        db.query.return_value = []
+        db.select.return_value = []
         db.insert.side_effect = [
             1,
             None,
@@ -245,12 +266,12 @@ class TestStoreImageDbWrite:
         storage.store_image(
             "/virtual/inbox/a.HEIC",
             {"year": "2025", "location": ""},
-            {"main_tag": "ukulele", "secondary_tag": "instrument"},
+            _vision("ukulele", "instrument"),
         )
         storage.store_image(
             "/virtual/inbox/b.HEIC",
             {"year": "2024", "location": ""},
-            {"main_tag": "ukulele", "secondary_tag": "music"},
+            _vision("ukulele", "music"),
         )
 
         ukulele_calls = [
@@ -260,6 +281,81 @@ class TestStoreImageDbWrite:
         ]
         assert len(ukulele_calls) == 2
         assert db.transaction.call_count == 2
+
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_persists_tag_relations_as_edges(
+        self, _exists, _makedirs, _move, _app_root
+    ):
+        db = _db_for_tags(tag_ids=[1, 2, 3, 4, 1])
+        storage = _storage(db=db)
+        metadata = {"year": "2025", "location": ""}
+        vision = _vision(
+            "cat",
+            "balcony",
+            relations=[{"parent": "animal", "child": "cat"}],
+        )
+
+        storage.store_image(SOURCE, metadata, vision)
+
+        edge_inserts = [
+            c for c in db.insert.call_args_list if c.args[0] == "tag_edges"
+        ]
+        assert len(edge_inserts) == 1
+        assert edge_inserts[0].args[1] == {"parent_id": 4, "child_id": 1}
+        relation_tag_names = [
+            c.args[1]["name"]
+            for c in db.first_or_create.call_args_list
+            if c.args[1]["name"] in {"animal", "cat"}
+        ]
+        assert "animal" in relation_tag_names
+
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_skips_self_relation(self, _exists, _makedirs, _move, _app_root):
+        db = _db_for_tags(tag_ids=[1, 2])
+        storage = _storage(db=db)
+        vision = _vision(
+            "cat",
+            relations=[{"parent": "cat", "child": "cat"}],
+        )
+
+        storage.store_image(
+            SOURCE, {"year": None, "location": ""}, vision
+        )
+
+        assert not any(
+            c.args[0] == "tag_edges" for c in db.insert.call_args_list
+        )
+        db.query.assert_not_called()
+
+    @_patch_app_root()
+    @patch("tagphy.tools.image_storage.move")
+    @patch("tagphy.tools.image_storage.os.makedirs")
+    @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
+    def test_skips_edge_when_cycle_detected(
+        self, _exists, _makedirs, _move, _app_root
+    ):
+        db = _db_for_tags(tag_ids=[1, 2, 2])
+        db.query.return_value = [{"1": 1}]
+        storage = _storage(db=db)
+        vision = _vision(
+            "animal",
+            relations=[{"parent": "animal", "child": "cat"}],
+        )
+
+        storage.store_image(
+            SOURCE, {"year": None, "location": ""}, vision
+        )
+
+        assert not any(
+            c.args[0] == "tag_edges" for c in db.insert.call_args_list
+        )
+        db.query.assert_called_once()
 
 
 class TestCompensatingDelete:
@@ -279,7 +375,7 @@ class TestCompensatingDelete:
             storage.store_image(
                 SOURCE,
                 {"year": "2024", "location": None},
-                {"main_tag": "cat", "secondary_tag": "balcony"},
+                _vision("cat", "balcony"),
             )
 
         db.delete.assert_called_once_with("images", {"id": 42})
@@ -299,7 +395,7 @@ class TestCompensatingDelete:
             storage.store_image(
                 SOURCE,
                 {"year": "2024", "location": None},
-                {"main_tag": "cat", "secondary_tag": "balcony"},
+                _vision("cat", "balcony"),
             )
 
         db.delete.assert_not_called()
