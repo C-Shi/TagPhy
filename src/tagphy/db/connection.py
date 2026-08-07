@@ -176,7 +176,9 @@ class SQLiteConnection:
         finally:
             self.disconnect()
 
-    def select(self, table: str, columns: list[str], where: dict[str, Any]) -> list[dict[str, Any]]:
+    def select(
+        self, table: str, columns: list[str], where: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Select rows from a table with conditions to precisely query by column.
 
         Args:
@@ -194,6 +196,7 @@ class SQLiteConnection:
         finally:
             if opened:
                 self.disconnect()
+
     def insert(self, table: str, data: dict[str, Any]) -> int:
         """Insert one row.
 
@@ -234,6 +237,19 @@ class SQLiteConnection:
         try:
             query = f"DELETE FROM {table} WHERE {' AND '.join(f'{k} = ?' for k in data.keys())}"
             self.cursor.execute(query, tuple(data.values()))
+        finally:
+            if opened:
+                self.disconnect()
+
+    def query(
+        self, query: str, params: tuple[Any, ...] | dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        opened = self._ensure_connection()
+        assert self.cursor is not None
+
+        try:
+            self.cursor.execute(query, params)
+            return self.cursor.fetchall()
         finally:
             if opened:
                 self.disconnect()

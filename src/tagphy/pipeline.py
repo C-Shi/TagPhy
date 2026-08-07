@@ -39,7 +39,7 @@ class ImageProcessingPipeline:
         self.db = SQLiteConnection()
         self.workdir = Path(workdir or (app_root() / DEFAULT_OUTPUT_DIR_NAME)).resolve()
         self.image_metadata = ImageMetadata()
-        self.image_vision = GeminiVisionEngine()
+        self.image_vision = GeminiVisionEngine(db=self.db)
         self.image_storage = ImageStorage(workdir=str(self.workdir), db=self.db)
 
     def run(self, path: str | Path):
@@ -79,11 +79,11 @@ class ImageProcessingPipeline:
         except Exception as e:
             return self._failure(image_path, "extract_metadata", e)
         try:
-            tags = self.image_vision.tag_image(image_path)
+            vision_response = self.image_vision.tag_image(image_path)
         except Exception as e:
             return self._failure(image_path, "tag_image", e)
         try:
-            return self.image_storage.store_image(image_path, metadata, tags)
+            return self.image_storage.store_image(image_path, metadata, vision_response)
         except Exception as e:
             return self._failure(image_path, "store_image", e)
 

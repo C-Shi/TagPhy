@@ -17,7 +17,7 @@ class ImageVision(ABC):
     @property
     def system_instruction(self) -> str:
         return """
-            You tag photos for a searchable catalog. Return one required main_tag, up to two additional_tags, and any needed tag_relations.
+            You tag photos for a searchable catalog. Return minimum of one, and maximum of three tags, and any needed tag_relations.
 
             Categories (most → least important). Use at most one tag per category, and at most three tags total:
             1. Subject — what the photo is mainly of
@@ -29,8 +29,8 @@ class ImageVision(ABC):
 
             Tagging rules:
             - Tag from image content only, not filename or metadata.
-            - main_tag = the most obvious, significant content (usually Subject).
-            - additional_tags = optional context from other categories; omit if not 99% confident.
+            - Always tag the most obvious, significant content (usually Subject).
+            - After having at least one tag, optionally add tags from context from other categories; omit if not 99% confident.
             - Prefer the most specific accurate noun (cat over animal).
             - English, one word, singular noun, lowercase — except established proper/tech forms (USA, iPhone, China).
             - Never use calendar values (2026, January, Monday).
@@ -42,10 +42,10 @@ class ImageVision(ABC):
             - Do not invent a near-synonym of a catalog tag when the catalog tag already fits.
 
             Tag relations (DAG growth):
-            - For each returned tag (main_tag and each additional_tag), compare it to the existing catalog list.
+            - For each returned tag, compare it to the existing catalog list.
             - If it has a clear hierarchical relationship with any catalog tag, add that parent/child pair to tag_relations.
             - Report the relationship even if that edge may already exist in the database.
-            - Do not create relations between main_tag and additional_tags on the same image.
+            - Do not create relations between tags on the same image.
             - If the catalog is empty, or no returned tag relates to any catalog tag, return an empty tag_relations list.
 
             Example 1 — empty catalog
@@ -53,19 +53,17 @@ class ImageVision(ABC):
             Image: a cat on a balcony
             Output:
                 {
-                    "main_tag": "cat",
-                    "additional_tags": ["balcony"],
+                    "tags": ["cat", "balcony"],
                     "tag_relations": []
                 }
-            Why: no catalog tags exist, so there is nothing to relate to. Do not add "animal" as an additional tag beside "cat".
+            Why: no catalog tags exist, so there is nothing to relate to. Do not add "animal" as an another tag beside "cat".
 
             Example 2 — reuse catalog and still report relations
             Existing catalog tags: animal, cat, balcony
             Image: a cat on a balcony
             Output:
                 {
-                    "main_tag": "cat",
-                    "additional_tags": ["balcony"],
+                    "tags": ["cat", "balcony"],
                     "tag_relations": [
                         {"parent": "animal", "child": "cat"}
                     ]
@@ -77,8 +75,7 @@ class ImageVision(ABC):
             Image: a man
             Output:
                 {
-                    "main_tag": "man",
-                    "additional_tags": [],
+                    "tags": ["man"],
                     "tag_relations": [
                         {"parent": "human", "child": "man"},
                         {"parent": "man", "child": "father"}
@@ -132,12 +129,11 @@ class GeminiVisionEngine(ImageVision):
             response_schema={
                 "type": "object",
                 "properties": {
-                    "main_tag": {"type": "string"},
-                    "additional_tags": {
+                    "tags": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "minItems": 0,
-                        "maxItems": 2,
+                        "minItems": 1,
+                        "maxItems": 3,
                     },
                     "tag_relations": {
                         "type": "array",
@@ -153,7 +149,7 @@ class GeminiVisionEngine(ImageVision):
                         "maxItems": 6,
                     },
                 },
-                "required": ["main_tag", "additional_tags", "tag_relations"],
+                "required": ["tags", "tag_relations"],
             },
             system_instruction=self.system_instruction,
         )

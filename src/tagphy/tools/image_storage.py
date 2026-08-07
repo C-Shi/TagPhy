@@ -18,14 +18,15 @@ class ImageStorage:
         self.db = db
 
     def store_image(
-        self, image_path: str, metadata: dict[str, str], tags: dict[str, str]
+        self, image_path: str, metadata: dict[str, str], vision_response: dict[str, Any]
     ) -> dict[str, Any]:
 
         # A variable to track the stage of the image storage process. Mainly for catch where the error happens
         stage = "BEGIN"
         year = metadata.get("year") or "Unknown"
 
-        tags_db = [*tags.values()]
+        tag_relations = vision_response.get("tag_relations", [])
+        tags_db = list(vision_response.get("tags") or [])
 
         if metadata.get("year"):
             tags_db.append(year)
@@ -49,7 +50,9 @@ class ImageStorage:
 
         try:
             stage = "DB_WRITE"
-            image_id = self._update_db_record(destination_path, metadata, tags_db)
+            image_id = self._update_db_record(
+                destination_path, metadata, tags_db, tag_relations
+            )
             stage = "FILE_MOVE"
             move(image_path, destination_path)
             stage = "DONE"
@@ -65,7 +68,11 @@ class ImageStorage:
             raise e
 
     def _update_db_record(
-        self, destination_path: str, metadata: dict[str, str], tags: list[str]
+        self,
+        destination_path: str,
+        metadata: dict[str, str],
+        tags: list[str],  # already contain year
+        tag_relations: list[dict[str, str]],
     ):
         """Write image, first-or-create tags, and image_tags join rows."""
 
@@ -75,6 +82,7 @@ class ImageStorage:
         year = metadata.get("year") or ""
 
         def insert_record():
+            # Insert Image Info
             image_id = self.db.insert(
                 "images",
                 {
@@ -84,6 +92,7 @@ class ImageStorage:
                     "location": metadata.get("location") or "",
                 },
             )
+            # Insert Tags
             for tag in dict.fromkeys(tags):
                 source = "metadata" if tag == year else "vision"
                 tag_id = self.db.first_or_create(
@@ -99,7 +108,57 @@ class ImageStorage:
                         "source": source,
                     },
                 )
-            # return image_id to the caller to use for the next step
+
+            # Insert Tag Relations
+            for relation in tag_relations:
+                # validate that relation is not a self-relation
+                if relation["parent"] == relation["child"]:
+                    continue
+
+                parent_id = self.db.first_or_create(
+                    "tags",
+                    {"name": relation["parent"], "source": "vision"},
+                    conflict_columns="name",
+                )
+                child_id = self.db.first_or_create(
+                    "tags",
+                    {"name": relation["child"], "source": "vision"},
+                    conflict_columns="name",
+                )
+
+                cycle_check = self.db.query(
+                    """
+                WITH RECURSIVE descendants(id) AS (
+                    SELECT :child_id
+                    UNION
+                    SELECT e.child_id
+                    FROM tag_edges e
+                    JOIN descendants d ON e.parent_id = d.id
+                )
+                SELECT 1 FROM descendants WHERE id = :parent_id;
+                """,
+                    {"parent_id": parent_id, "child_id": child_id},
+                )
+
+                if len(cycle_check) > 0:
+                    continue
+
+                edge = self.db.select(
+                    "tag_edges",
+                    ["parent_id", "child_id"],
+                    {"parent_id": parent_id, "child_id": child_id},
+                )
+
+                if len(edge) == 0:
+                    self.db.insert(
+                        "tag_edges",
+                        {
+                            "parent_id": parent_id,
+                            "child_id": child_id,
+                        },
+                    )
+
+                # return image_id to the caller to use for the next step
             return image_id
 
         return self.db.transaction(insert_record)
