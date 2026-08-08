@@ -21,17 +21,10 @@ export type TagRef = {
   name: string
 }
 
-export type Tag = {
-  id: number
-  name: string
-  source: string
-  description: string
-  photo_count: number
-  child_count: number
-  parents: TagRef[]
-  children: TagRef[]
-}
-
-export type TagsResponse = {
-  tags: Tag[]
+export class TagResponse {
+  id!: number
+  name!: string
+  source!: "vision" | "metadata"
+  photo_count!: number
+  children!: TagRef[]
 }

@@ -242,7 +242,7 @@ class SQLiteConnection:
                 self.disconnect()
 
     def query(
-        self, query: str, params: tuple[Any, ...] | dict[str, Any]
+        self, query: str, params: tuple[Any, ...] | dict[str, Any] = []
     ) -> list[dict[str, Any]]:
         opened = self._ensure_connection()
         assert self.cursor is not None

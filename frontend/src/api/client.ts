@@ -1,4 +1,4 @@
-import type { Tag, TagsResponse } from './types'
+import type { TagResponse } from './types'
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -13,13 +13,13 @@ async function parseJson<T>(res: Response): Promise<T> {
 }
 
 /** Relative /api — Vite proxies in dev; same-origin when packaged. */
-export async function fetchTags(): Promise<Tag[]> {
+export async function fetchTags(): Promise<TagResponse[]> {
   const res = await fetch('/api/tags')
-  const data = await parseJson<TagsResponse>(res)
-  return data.tags ?? []
+  const data = await parseJson<TagResponse[]>(res)
+  return data || []
 }
 
-export async function fetchTag(id: number): Promise<Tag> {
+export async function fetchTag(id: number): Promise<TagResponse> {
   const res = await fetch(`/api/tags/${id}`)
-  return parseJson<Tag>(res)
+  return parseJson<TagResponse>(res)
 }

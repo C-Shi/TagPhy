@@ -1,49 +1,50 @@
-import { useEffect, useMemo, useState } from 'react'
-import { fetchTags } from '../api/client'
-import type { Tag } from '../api/types'
-import { TagCard } from '../components/TagCard'
+import { useEffect, useMemo, useState } from "react";
+import { fetchTags } from "../api/client";
+import type { TagResponse } from "../api/types";
+import { TagCard } from "../components/TagCard";
 
-function isYearMeta(tag: Tag): boolean {
-  return tag.source === 'metadata'
+function isYearMeta(tag: TagResponse): boolean {
+  return tag.source === "metadata";
 }
 
-function sortYearsDesc(a: Tag, b: Tag): number {
-  return b.name.localeCompare(a.name, undefined, { numeric: true })
+function sortYearsDesc(a: TagResponse, b: TagResponse): number {
+  return b.name.localeCompare(a.name, undefined, { numeric: true });
 }
 
-function sortNameAsc(a: Tag, b: Tag): number {
-  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+function sortNameAsc(a: TagResponse, b: TagResponse): number {
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
 export function LibraryPage() {
-  const [tags, setTags] = useState<Tag[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [tags, setTags] = useState<TagResponse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false
-    setError(null)
+    let cancelled = false;
+    setError(null);
     fetchTags()
       .then((data) => {
-        if (!cancelled) setTags(data)
+        console.log(data);
+        if (!cancelled) setTags(data);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setTags(null)
-          setError(err instanceof Error ? err.message : 'Failed to load tags')
+          setTags(null);
+          setError(err instanceof Error ? err.message : "Failed to load tags");
         }
-      })
+      });
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   const { yearTags, otherTags } = useMemo(() => {
-    const list = tags ?? []
+    const list = tags ?? [];
     return {
       yearTags: list.filter(isYearMeta).sort(sortYearsDesc),
       otherTags: list.filter((t) => !isYearMeta(t)).sort(sortNameAsc),
-    }
-  }, [tags])
+    };
+  }, [tags]);
 
   return (
     <div className="w-full px-8 py-6">
@@ -56,9 +57,12 @@ export function LibraryPage() {
 
       {error && (
         <div className="mb-4 rounded-md border border-label-orange/40 bg-surface px-3 py-2 text-base text-ink">
-          <span className="font-medium text-label-orange">Couldn’t load tags.</span>{' '}
+          <span className="font-medium text-label-orange">
+            Couldn’t load tags.
+          </span>{" "}
           <span className="text-ink-muted">
-            Is FastAPI running on port 8765 with <code className="text-ink">GET /api/tags</code>?
+            Is FastAPI running on port 8765 with{" "}
+            <code className="text-ink">GET /api/tags</code>?
           </span>
           <div className="mt-1 font-mono text-sm text-ink-muted">{error}</div>
         </div>
@@ -110,5 +114,5 @@ export function LibraryPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
