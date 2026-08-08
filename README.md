@@ -12,12 +12,23 @@ cp .env.example .env
 tagphy
 ```
 
-Open http://127.0.0.1:8765
+API: http://127.0.0.1:8765
+
+### Frontend (Library UI)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+UI: http://127.0.0.1:5173 — proxies `/api` to FastAPI. See `frontend/README.md` for the JSON contract you implement on the backend.
 
 ## Layout
 
 ```
 src/tagphy/       # app code (pipeline functions, web, db)
+frontend/         # React + Vite + Tailwind (Library UI)
 ```
 
 Runtime folders like `Photo_Tagged/` belong on the USB drive when the app runs — not in this repo.

@@ -82,4 +82,4 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 ## Status
 
-Stage Two complete. Stage Three task 1 (multi-directory / multi-file facilitator) done; task 2 (concurrency) deferred by decision. Stage Four task 1 (database ERD + DDL) done. Next: Stage Four task 2 (migration runner on app/web-server start).
+Stage four complete
