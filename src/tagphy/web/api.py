@@ -11,6 +11,6 @@ async def tag_info():
     return tag_helper.get_tags_with_details()
 
 
-@router.get("/tags/{tag_id}")
+@router.get("/tags/{tag_id}/pictures")
 async def get_tag(tag_id: int):
-    return {"tag": {}}
+    return tag_helper.get_tag_pictures(tag_id)

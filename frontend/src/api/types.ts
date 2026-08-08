@@ -27,4 +27,14 @@ export class TagResponse {
   source!: "vision" | "metadata"
   photo_count!: number
   children!: TagRef[]
+  parents!: TagRef[]
+}
+
+export type TagPictureResponse = {
+  id: number
+  name: string
+  source: "vision" | "metadata"
+  children: TagRef[]
+  parents: TagRef[]
+  pictures: []
 }

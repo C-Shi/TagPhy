@@ -1,35 +1,35 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { fetchTag } from '../api/client'
-import type { Tag } from '../api/types'
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { fetchTagPictures } from "../api/client";
+import type { TagPictureResponse } from "../api/types";
 
 export function TagPicturesPage() {
-  const { tagId } = useParams()
-  const id = Number(tagId)
-  const [tag, setTag] = useState<Tag | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { tagId } = useParams();
+  const id = Number(tagId);
+  const [tag, setTag] = useState<TagPictureResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!Number.isFinite(id)) {
-      setError('Invalid tag id')
-      return
+      setError("Invalid tag id");
+      return;
     }
-    let cancelled = false
-    setError(null)
-    setTag(null)
-    fetchTag(id)
+    let cancelled = false;
+    setError(null);
+    setTag(null);
+    fetchTagPictures(id)
       .then((data) => {
-        if (!cancelled) setTag(data)
+        if (!cancelled) setTag(data);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load tag')
+          setError(err instanceof Error ? err.message : "Failed to load tag");
         }
-      })
+      });
     return () => {
-      cancelled = true
-    }
-  }, [id])
+      cancelled = true;
+    };
+  }, [id]);
 
   return (
     <div className="w-full px-8 py-6">
@@ -42,7 +42,9 @@ export function TagPicturesPage() {
 
       {error && (
         <div className="mt-4 rounded-md border border-label-orange/40 bg-surface px-3 py-2 text-base">
-          <span className="font-medium text-label-orange">Couldn’t load tag.</span>
+          <span className="font-medium text-label-orange">
+            Couldn’t load tag.
+          </span>
           <div className="mt-1 font-mono text-sm text-ink-muted">{error}</div>
         </div>
       )}
@@ -56,10 +58,10 @@ export function TagPicturesPage() {
           <h1 className="mt-3 text-2xl font-semibold text-ink">{tag.name}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <span className="rounded px-2 py-0.5 text-sm font-medium text-label-blue ring-1 ring-label-blue/25">
-              {tag.photo_count} photos
+              {tag.pictures?.length} photos
             </span>
             <span className="rounded px-2 py-0.5 text-sm font-medium text-label-pink ring-1 ring-label-pink/25">
-              {tag.child_count} child tags
+              {tag.children.length} child tags
             </span>
             <span className="rounded px-2 py-0.5 text-sm font-medium text-label-yellow ring-1 ring-label-yellow/25">
               {tag.source}
@@ -78,15 +80,15 @@ export function TagPicturesPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function RelationList({
   title,
   items,
 }: {
-  title: string
-  items: { id: number; name: string }[]
+  title: string;
+  items: { id: number; name: string }[];
 }) {
   return (
     <section className="rounded-md border border-line bg-surface p-3">
@@ -110,5 +112,5 @@ function RelationList({
         </ul>
       )}
     </section>
-  )
+  );
 }

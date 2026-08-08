@@ -1,4 +1,4 @@
-import type { TagResponse } from './types'
+import type { TagResponse, TagPictureResponse } from './types'
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -19,7 +19,7 @@ export async function fetchTags(): Promise<TagResponse[]> {
   return data || []
 }
 
-export async function fetchTag(id: number): Promise<TagResponse> {
-  const res = await fetch(`/api/tags/${id}`)
-  return parseJson<TagResponse>(res)
+export async function fetchTagPictures(id: number): Promise<TagPictureResponse> {
+  const res = await fetch(`/api/tags/${id}/pictures`)
+  return parseJson<TagPictureResponse>(res)
 }
