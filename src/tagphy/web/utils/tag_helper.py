@@ -67,10 +67,15 @@ class TagHelper:
     def get_tag_pictures(self, tag_id: int):
         """Get all pictures for a tag."""
 
+        if not tag_id or not isinstance(tag_id, int) or tag_id <= 0:
+            raise ValueError("Bad Request: Invalid Tag")
+
         # get tag info
         tag_info = self.db.query(
             "SELECT id, name, source FROM tags WHERE id = ?", (tag_id,)
         )
+        if not tag_info:
+            raise ValueError("Bad Request: Invalid Tag")
         tag_pictures_response = dict(tag_info[0])
 
         # get all descendants tags

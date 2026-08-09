@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from tagphy.db import SQLiteConnection
 from tagphy.web.utils.tag_helper import TagHelper
 
@@ -13,4 +13,7 @@ async def tag_info():
 
 @router.get("/tags/{tag_id}/pictures")
 async def get_tag(tag_id: int):
-    return tag_helper.get_tag_pictures(tag_id)
+    try:
+        return tag_helper.get_tag_pictures(tag_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
