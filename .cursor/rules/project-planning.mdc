@@ -54,7 +54,7 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 1. `/scan`: page to browse a file or folder path and click Scan. The pipeline classifies and moves files.
 2. `/tags`: list all tags with photo counts; navigate into each tag; show DAG relationships (multi-parent / multi-child).
-3. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of photos tagged directly under that tag (with view options).
+3. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options).
 4. Search and filter on all pages except `/scan`.
 5. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
 

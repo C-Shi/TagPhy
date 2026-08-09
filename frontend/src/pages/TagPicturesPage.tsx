@@ -32,10 +32,10 @@ export function TagPicturesPage() {
   }, [id]);
 
   return (
-    <div className="w-full px-8 py-6">
+    <div className="w-full px-4 py-6 library:px-8">
       <Link
         to="/tags"
-        className="inline-flex items-center text-base font-medium text-accent hover:underline"
+        className="inline-flex items-center rounded bg-accent px-3 py-1.5 text-base font-medium text-on-accent hover:brightness-110"
       >
         ← Library
       </Link>
@@ -57,13 +57,13 @@ export function TagPicturesPage() {
         <>
           <h1 className="mt-3 text-2xl font-semibold text-ink">{tag.name}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="rounded px-2 py-0.5 text-sm font-medium text-label-blue ring-1 ring-label-blue/25">
+            <span className="rounded bg-label-blue px-2 py-0.5 text-sm font-medium text-on-chip">
               {tag.pictures?.length} photos
             </span>
-            <span className="rounded px-2 py-0.5 text-sm font-medium text-label-pink ring-1 ring-label-pink/25">
+            <span className="rounded bg-label-pink px-2 py-0.5 text-sm font-medium text-on-chip">
               {tag.children.length} child tags
             </span>
-            <span className="rounded px-2 py-0.5 text-sm font-medium text-label-yellow ring-1 ring-label-yellow/25">
+            <span className="rounded bg-label-yellow px-2 py-0.5 text-sm font-medium text-on-chip">
               {tag.source}
             </span>
           </div>

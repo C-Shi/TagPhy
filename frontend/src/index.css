@@ -3,17 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --color-canvas: #e6e3df;
-  --color-surface: #f4f1ed;
-  --color-ink: #3a2c24;
-  --color-ink-muted: #7a6558;
-  --color-accent: #6b4a35;
-  --color-accent-soft: #efe4da;
-  --color-line: #d2cbc3;
-  --color-label-yellow: #c4921a;
-  --color-label-orange: #c46a2d;
-  --color-label-blue: #3d6ea8;
-  --color-label-pink: #b84d7a;
+  /* Photo-lab: richer, less pale */
+  --color-canvas: #d9cfc4;
+  --color-panel: #efe6db;
+  --color-surface: #f7f0e8;
+  --color-header: #2c211c;
+  --color-header-muted: #c4b5a8;
+  --color-ink: #2a1f1a;
+  --color-ink-muted: #6b5346;
+  --color-accent: #8b5a2b;
+  --color-accent-soft: #e8d4c0;
+  --color-line: #c4b3a3;
+  --color-on-accent: #fff8f0;
+  --color-label-yellow: #c48912;
+  --color-label-orange: #d45a1f;
+  --color-label-blue: #2f6fad;
+  --color-label-pink: #c23d72;
+  --color-chip-text: #fffaf5;
 }
 
 html,

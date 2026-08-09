@@ -5,7 +5,12 @@ export default {
     extend: {
       colors: {
         canvas: 'var(--color-canvas)',
+        panel: 'var(--color-panel)',
         surface: 'var(--color-surface)',
+        header: {
+          DEFAULT: 'var(--color-header)',
+          muted: 'var(--color-header-muted)',
+        },
         ink: {
           DEFAULT: 'var(--color-ink)',
           muted: 'var(--color-ink-muted)',
@@ -13,6 +18,10 @@ export default {
         accent: {
           DEFAULT: 'var(--color-accent)',
           soft: 'var(--color-accent-soft)',
+        },
+        on: {
+          accent: 'var(--color-on-accent)',
+          chip: 'var(--color-chip-text)',
         },
         line: 'var(--color-line)',
         label: {
@@ -25,8 +34,8 @@ export default {
       fontFamily: {
         sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
       },
-      boxShadow: {
-        none: 'none',
+      screens: {
+        library: '900px',
       },
     },
   },
