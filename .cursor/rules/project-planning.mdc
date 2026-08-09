@@ -68,8 +68,8 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
    - Update TagHelper to only serve Tag. So get_tag_pictures will be split. and only return tag info
    - Add Picture helper to only serve Pictures. so /tags/tag_id/pictures should call Taghelper first, then use its response to call PictureHelpers and combine them
    - a /pictures route with corresponding helper. Route should take query of pagination info
-   - In PictureHelper, define a method should run query to return picture information based on tag selection (including child - may reuse )
-   - In Picture Helper, define a method that accept a picture_id, and return a BLOB thumbnail for front end to preview
+   - In PictureHelper, define a method should run query to return picture information based on tag selection
+   - In PictureHelper, define a method that accept a picture_id, and return a BLOB thumbnail for front end to preview
 
 4. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options).
 5. Search and filter on all pages except `/scan`.
