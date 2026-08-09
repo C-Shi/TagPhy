@@ -1,4 +1,5 @@
 from typing import Any
+from ..utils.picture_helper import PictureHelper
 
 
 class TagHelper:
@@ -113,19 +114,5 @@ class TagHelper:
         """
         parents = self.db.query(parents_query, (tag_id,))
         tag_pictures_response["parents"] = [dict(parent) for parent in parents]
-
-        # get all direct and indirect images
-
-        image_tag_ids = [child["id"] for child in tag_pictures_response["children"]]
-        image_tag_ids.append(tag_id)
-
-        images_query = f"""
-            SELECT *
-            FROM images i
-            JOIN image_tags it ON i.id = it.image_id
-            WHERE it.tag_id IN ({",".join(["?"] * len(image_tag_ids))})
-        """
-        images = self.db.query(images_query, [str(id) for id in image_tag_ids])
-        tag_pictures_response["pictures"] = [dict(image) for image in images]
 
         return tag_pictures_response

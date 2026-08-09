@@ -9,14 +9,7 @@ import pytest
 from tagphy.web.utils.tag_helper import TagHelper
 
 TAG_RESPONSE_KEYS = {"id", "name", "source", "photo_count", "children", "parents"}
-TAG_PICTURE_RESPONSE_KEYS = {
-    "id",
-    "name",
-    "source",
-    "children",
-    "parents",
-    "pictures",
-}
+TAG_PICTURE_RESPONSE_KEYS = {"id", "name", "source", "children", "parents"}
 TAG_REF_KEYS = {"id", "name"}
 
 
@@ -102,9 +95,6 @@ class TestGetTagPictures:
         assert result["source"] == "vision"
         assert result["children"] == [{"id": 2, "name": "Meowy"}]
         assert result["parents"] == [{"id": 10, "name": "Pet"}]
-        assert isinstance(result["pictures"], list)
-        assert len(result["pictures"]) >= 1
-        assert result["pictures"][0]["id"] == 101
 
     @pytest.mark.parametrize("tag_id", [0, -1, None])
     def test_invalid_tag_id_raises_value_error(self, tag_id):
