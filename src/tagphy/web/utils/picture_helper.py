@@ -3,12 +3,14 @@ import os
 from typing import Any
 
 from PIL import Image
+from pillow_heif import register_heif_opener
 
 from tagphy import app_root
 
 
 # set default picture per page
 _PAGINATION_DEFAULT_ = 25
+register_heif_opener()
 
 
 class PictureHelper:

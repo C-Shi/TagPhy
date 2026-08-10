@@ -36,5 +36,17 @@ export type TagPictureResponse = {
   source: "vision" | "metadata"
   children: TagRef[]
   parents: TagRef[]
-  pictures: []
+  pictures: Picture[]
+}
+
+/** Row from GET /api/pictures (images table). */
+export type Picture = {
+  id: number
+  file_name: string
+  file_path: string
+  year: string
+  location: string
+  description: string
+  created_at: string
+  updated_at: string
 }

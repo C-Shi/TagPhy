@@ -7,7 +7,7 @@ type Props = {
   onToggleSelect: (tagId: number) => void
 }
 
-export function TagCard({ tag, selected, onToggleSelect }: Props) {
+export function TagListItem({ tag, selected, onToggleSelect }: Props) {
   const photoLabel =
     tag.photo_count === 1 ? '1 photo' : `${tag.photo_count} photos`
   const childLabel =

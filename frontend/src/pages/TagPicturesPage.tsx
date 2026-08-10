@@ -34,7 +34,7 @@ export function TagPicturesPage() {
   return (
     <div className="w-full px-4 py-6 library:px-8">
       <Link
-        to="/tags"
+        to="/library"
         className="inline-flex items-center rounded bg-accent px-3 py-1.5 text-base font-medium text-on-accent hover:brightness-110"
       >
         ← Library

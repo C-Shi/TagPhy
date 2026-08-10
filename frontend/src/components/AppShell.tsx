@@ -1,6 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet } from "react-router-dom";
 
-const upcoming = ['Scan', 'Agent', 'Settings'] as const
+const upcoming = ["Scan", "Agent", "Settings"] as const;
 
 export function AppShell() {
   return (
@@ -12,14 +12,14 @@ export function AppShell() {
           </div>
           <nav className="flex min-w-0 flex-wrap items-center gap-1 text-base">
             <NavLink
-              to="/tags"
+              to="/library"
               className={({ isActive }) =>
                 [
-                  'rounded px-3 py-1.5 font-medium',
+                  "rounded px-3 py-1.5 font-medium",
                   isActive
-                    ? 'bg-accent text-on-accent'
-                    : 'text-header-muted hover:bg-white/10 hover:text-on-accent',
-                ].join(' ')
+                    ? "bg-accent text-on-accent"
+                    : "text-header-muted hover:bg-white/10 hover:text-on-accent",
+                ].join(" ")
               }
             >
               Library
@@ -54,5 +54,5 @@ export function AppShell() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }
