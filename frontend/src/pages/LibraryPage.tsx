@@ -12,6 +12,7 @@ export function LibraryPage() {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(
     () => new Set(),
   )
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     let cancelled = false
@@ -35,7 +36,7 @@ export function LibraryPage() {
     let cancelled = false
     setPicturesError(null)
     fetchPictures({
-      pagination: 1,
+      pagination: page,
       tagIds: [...selectedTagIds],
     })
       .then((data) => {
@@ -52,7 +53,7 @@ export function LibraryPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedTagIds])
+  }, [selectedTagIds, page])
 
   const selectedTags = useMemo(() => {
     if (!tags) return []
@@ -60,6 +61,7 @@ export function LibraryPage() {
   }, [tags, selectedTagIds])
 
   function toggleSelect(tagId: number) {
+    setPage(1)
     setSelectedTagIds((prev) => {
       const next = new Set(prev)
       if (next.has(tagId)) next.delete(tagId)
@@ -69,6 +71,7 @@ export function LibraryPage() {
   }
 
   function clearFilters() {
+    setPage(1)
     setSelectedTagIds(new Set())
   }
 
@@ -151,7 +154,11 @@ export function LibraryPage() {
             selectedTagIds={selectedTagIds}
             onToggleSelect={toggleSelect}
           />
-          <Preview pictures={pictures} />
+          <Preview
+            pictures={pictures}
+            page={page}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>
