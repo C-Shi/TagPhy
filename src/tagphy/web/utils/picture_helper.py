@@ -18,7 +18,9 @@ class PictureHelper:
         self.page_size = page_size
         self.db = db
 
-    def get_pictures_for_tags_flatted(self, tag_ids: list[int] = [], page: int = 1):
+    def get_pictures_for_tags_flatted(
+        self, tag_ids: list[int] | tuple[int] | set[int] = [], page: int = 1
+    ):
         """Get all pictures for a list of tags flattened into a single list."""
 
         try:

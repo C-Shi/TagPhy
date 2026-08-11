@@ -18,21 +18,6 @@ class TagHelper:
         tags = self.db.query(base_query)
         tags = [dict(tag) for tag in tags]
 
-        children_query = """
-            WITH RECURSIVE descendants(id) AS (
-                SELECT e.child_id
-                FROM tag_edges e
-                WHERE e.parent_id = ?
-                UNION
-                SELECT e.child_id
-                FROM tag_edges e
-                JOIN descendants d ON e.parent_id = d.id
-            )
-            SELECT t.id, t.name
-            FROM descendants d
-            JOIN tags t ON t.id = d.id;
-        """
-
         parents_query = """
             WITH RECURSIVE ancestors(id) AS (
                 SELECT e.parent_id
@@ -49,7 +34,7 @@ class TagHelper:
         """
 
         for tag in tags:
-            children = self.db.query(children_query, (tag["id"],))
+            children = self.get_descendants_tags(tag["id"])
             tag["children"] = [dict(child) for child in children]
             parents = self.db.query(parents_query, (tag["id"],))
             tag["parents"] = [dict(parent) for parent in parents]
@@ -64,6 +49,24 @@ class TagHelper:
                 tag["photo_count"] += child_image_count[0]["child_count"]
 
         return tags
+
+    def get_descendants_tags(self, tag_id: int):
+        children_query = """
+            WITH RECURSIVE descendants(id) AS (
+                SELECT e.child_id
+                FROM tag_edges e
+                WHERE e.parent_id = ?
+                UNION
+                SELECT e.child_id
+                FROM tag_edges e
+                JOIN descendants d ON e.parent_id = d.id
+            )
+            SELECT t.id, t.name
+            FROM descendants d
+            JOIN tags t ON t.id = d.id;
+        """
+        children = self.db.query(children_query, (tag_id,))
+        return [dict(child) for child in children]
 
     def get_tag_pictures(self, tag_id: int):
         """Get all pictures for a tag."""
@@ -80,21 +83,7 @@ class TagHelper:
         tag_pictures_response = dict(tag_info[0])
 
         # get all descendants tags
-        children_query = """
-            WITH RECURSIVE descendants(id) AS (
-                SELECT e.child_id
-                FROM tag_edges e
-                WHERE e.parent_id = ?
-                UNION
-                SELECT e.child_id
-                FROM tag_edges e
-                JOIN descendants d ON e.parent_id = d.id
-            )
-            SELECT t.id, t.name
-            FROM descendants d
-            JOIN tags t ON t.id = d.id;
-        """
-        children = self.db.query(children_query, (tag_id,))
+        children = self.get_descendants_tags(tag_id)
         tag_pictures_response["children"] = [dict(child) for child in children]
 
         # get all parent tags

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, status, Response
+from fastapi import APIRouter, HTTPException, status, Response, Query
+from typing import Annotated
 from tagphy.db import SQLiteConnection
 from tagphy.web.utils.tag_helper import TagHelper
 from tagphy.web.utils.picture_helper import PictureHelper
@@ -8,6 +9,7 @@ tag_helper = TagHelper(db=SQLiteConnection())
 picture_helper = PictureHelper(db=SQLiteConnection())
 
 
+# Tag Routes
 @router.get("/tags")
 async def tag_info():
     return tag_helper.get_tags_with_details()
@@ -28,10 +30,21 @@ async def get_tag(tag_id: int):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# Picture Routes
 @router.get("/pictures")
-async def get_pictures():
+async def get_pictures(
+    pagination: int = 1, tag_ids: Annotated[list[int], Query()] = []
+):
     try:
-        pictures = picture_helper.get_pictures_for_tags_flatted()
+        # get all selected tags and their children tags
+        selected_tag_ids = [*tag_ids]
+        for tag_id in tag_ids:
+            descendants = tag_helper.get_descendants_tags(tag_id)
+            selected_tag_ids.extend([descendant["id"] for descendant in descendants])
+        selected_tag_ids = tuple(set(selected_tag_ids))
+        pictures = picture_helper.get_pictures_for_tags_flatted(
+            page=pagination, tag_ids=selected_tag_ids
+        )
         return pictures
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
