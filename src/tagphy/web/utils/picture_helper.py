@@ -59,6 +59,7 @@ class PictureHelper:
                     """
 
                     condition_query = []
+                    print(tag_ids)
                     for sublist in tag_ids:
                         x = ", ".join(["?" for _ in sublist])
                         per_condition_query = f"EXISTS (SELECT 1 FROM image_tags WHERE image_id = i.id AND tag_id IN ({x}))"
