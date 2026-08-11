@@ -10,7 +10,7 @@ export default function App() {
         <Route index element={<Navigate to="/tags" replace />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/tags/:tagId/pictures" element={<TagPicturesPage />} />
-        <Route path="*" element={<Navigate to="/tags" replace />} />
+        <Route path="*" element={<Navigate to="/library" replace />} />
       </Route>
     </Routes>
   );

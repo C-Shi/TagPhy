@@ -35,13 +35,17 @@ async def get_tag(tag_id: int):
 async def get_pictures(
     pagination: int = 1, tag_ids: Annotated[list[int], Query()] = []
 ):
+    # this query implement the AND logic for multiple tags - picture selections
     try:
         # get all selected tags and their children tags
-        selected_tag_ids = [*tag_ids]
+        selected_tag_ids = []
         for tag_id in tag_ids:
+            # get all descendants tags including the current tag
             descendants = tag_helper.get_descendants_tags(tag_id)
-            selected_tag_ids.extend([descendant["id"] for descendant in descendants])
-        selected_tag_ids = tuple(set(selected_tag_ids))
+            descendants_ids = [descendant["id"] for descendant in descendants]
+            descendants_ids.append(tag_id)
+            # append them into separate lists
+            selected_tag_ids.append(descendants_ids)
         pictures = picture_helper.get_pictures_for_tags_flatted(
             page=pagination, tag_ids=selected_tag_ids
         )
