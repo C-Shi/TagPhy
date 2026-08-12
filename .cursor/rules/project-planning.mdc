@@ -53,6 +53,26 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 ### Stage Five: Web Server GUI (FastAPI + React)
 
 1. `/scan`: page to browse a file or folder path and click Scan. The pipeline classifies and moves files.
+   - Front End UI component: a Scan Page
+   - Front End UI Look: A clean page with Path Selection in the center. It should open a model to Select a file or a directory. A "Scan" button is side by side that act as trigger. Similar to what a "Save File" will looks like normally. Discuss UI with Agent
+   - Front End UI Look: Under the Path selection section, there is a log section for display processing status, which is empty when system idle, but rolling print the current processing status (like when you running job in terminal)
+   - Front End Behavior: After select a path, user can Click on "Scan", which send POST request with the path to FastAPI, and backend start ImageProcessingPipeline
+   - Front End Behavior: When image is processing, "Scan" is turned into "Stop". Clicking the Stop, a modal confirmation pop up and allow you to send a POST request to FastAPI which stop the current image processing
+   - Front End Behavior: During running, the log section should rolling printing the current status: Processing Image XXXXX. When finished or cancel, it should print out info "XXX processed, Y successed, X failed, Z skipped"
+   - Front End Design: new API call route, as well websocket to keep sync with backend log. All new logic sit in Scan Page
+
+   - Backend Routing: 3 new route - /process - to start processing image pipeline, /stop - to stop the running pipeline, /status - a websocket to push status log to UI - Co-design with Agent
+   - Backend Design: Will use Queue to allow log to be access by websockt and Event to control the start and stop of the pipeline by a different API request. Also use thread.Lock to ensure only one active pipeline is running. Co-design with Agent
+   - Backend Logging: Currently printing image process status to terminal, update so that it also push to Queue
+
+   - Boundary:
+     - No automatic timeout. Either backend timeout automatically at gemini, or user kill it.
+     - If Cancel, no rollback. Whatever is processed and moved, stay there. However, it should reset the front end path selection
+     - For this story, it when running, should freeze the page switch and lock in current /scan page
+     - a single image processing fail should not stop the process, but should log a different color in the log section
+   - Question: What if user close the FE browser while backend still running, and re-open it later? What should I do now, and for future when wrap in a desktop app
+   - Comment: This backend start,stop and ws logic is new to me. I accept my weakness and will heavily rely on co-design with and accept advice from agent
+
 2. `/tags`: list all tags with photo counts; navigate into each tag; show DAG relationships (multi-parent / multi-child).
 3. Library + picture preview refactor (**mostly done**). As-built:
    - Library = tags sidebar + pictures preview; FE route `/library` (nav uses `/library`).
@@ -65,8 +85,7 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
    **5.3 follow-ups (not done):** fix default redirects still pointing at `/tags` (should be `/library`); multi-tag filter should be **AND** (today’s `IN` is OR); `DISTINCT` on picture list; prefer `ORDER BY created_at DESC`; add PictureHelper / `/pictures` tests.
 
 4. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options). (Detail page shell exists; real gallery still thin — separate from 5.3 Library preview.)
-5. Search and filter on all pages except `/scan`.
-6. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
+5. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
 
 ### Stage Six: Catalog Assistant Agent (ADK — the real agent use case)
 
