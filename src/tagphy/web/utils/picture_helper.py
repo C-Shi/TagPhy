@@ -18,14 +18,14 @@ class PictureHelper:
         self.page_size = page_size
         self.db = db
 
-    def get_pictures_for_tags_flatted(
+    def get_pictures_for_tags(
         self,
         tag_ids: list[int | list[int]] = [],
         page: int = 1,
         logic: str = "AND",
     ):
         """
-        Get all pictures for a list of tags flattened into a single list.
+        Get all pictures for a list of tags. This method will query for tag_ids passed ONLY. To include children tags, call recursive tag retrieval before passing in tag_ids
 
         Args:
             tag_ids: A list of tag IDs (for OR logic), or a list of lists of tag IDs (for AND logic)
@@ -59,7 +59,6 @@ class PictureHelper:
                     """
 
                     condition_query = []
-                    print(tag_ids)
                     for sublist in tag_ids:
                         x = ", ".join(["?" for _ in sublist])
                         per_condition_query = f"EXISTS (SELECT 1 FROM image_tags WHERE image_id = i.id AND tag_id IN ({x}))"
@@ -76,7 +75,7 @@ class PictureHelper:
                     )
 
                 raise ValueError(
-                    "Invalid Tag Selection Logic Type. Must be 'OR' or 'AND' but got {logic}"
+                    f"Invalid Tag Selection Logic Type. Must be 'OR' or 'AND' but got {logic}"
                 )
             else:
                 images_query += f"""

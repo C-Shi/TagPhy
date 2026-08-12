@@ -54,24 +54,17 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 1. `/scan`: page to browse a file or folder path and click Scan. The pipeline classifies and moves files.
 2. `/tags`: list all tags with photo counts; navigate into each tag; show DAG relationships (multi-parent / multi-child).
-3. This is a correction story for /tags for some not so great design update and refactor. As well as the image previe feature. Quite Big a story. Requirement as follow:
-   - The Library page is no longer a simple /tags. It is actually /tags + /pictures so
-   - The FE route should not says /tags, but should says /library
-   - When the page load, call to backend /api/tags should still remain unchanged, but display should move out of library page into a seperate component called TagList
-   - The current TagCard component , should actually now become TagListItem, other thing unchanged
-   - The right side preview, should be a reusable component for ONLY previewing picture. The component should called PictureList, and each picture thumbnail card should be PictureListItem
-   - When Library Page loaded, it should fire another request to /pictures (to be completed here), which fetch the first 25 pictures (pagination later)
-   - When the response come back, FE should called /pictures/id/preview for each image, that download image thumbnail and preview
-   - Whenever Tag Filter change, the /pictures should refire and update the result
+3. Library + picture preview refactor (**mostly done**). As-built:
+   - Library = tags sidebar + pictures preview; FE route `/library` (nav uses `/library`).
+   - Lifted state on `LibraryPage`: `GET /api/tags` + `GET /api/pictures`; refetch when tag filter or page changes.
+   - FE components: `TagList` / `TagListItem` (ex-TagCard); reusable `Preview` / `PreviewItem` (not PictureList — naming locked in implementation).
+   - Thumbs: `<img src=/api/pictures/{id}/preview>` (fixed ~160px tiles); list metadata separate from image bytes.
+   - Pagination bar (page size 25); Next enabled when a full page returns.
+   - Backend: `TagHelper.get_tag_pictures` returns tag info only; `/tags/{id}/pictures` composes `PictureHelper`. `GET /pictures?pagination=&tag_ids=` expands selected tags’ descendants; `get_picture_preview` returns JPEG bytes (~320px).
 
-   Backend corresponding upgrade
-   - Update TagHelper to only serve Tag. So get_tag_pictures will be split. and only return tag info
-   - Add Picture helper to only serve Pictures. so /tags/tag_id/pictures should call Taghelper first, then use its response to call PictureHelpers and combine them
-   - a /pictures route with corresponding helper. Route should take query of pagination info
-   - In PictureHelper, define a method should run query to return picture information based on tag selection
-   - In PictureHelper, define a method that accept a picture_id, and return a BLOB thumbnail for front end to preview
+   **5.3 follow-ups (not done):** fix default redirects still pointing at `/tags` (should be `/library`); multi-tag filter should be **AND** (today’s `IN` is OR); `DISTINCT` on picture list; prefer `ORDER BY created_at DESC`; add PictureHelper / `/pictures` tests.
 
-4. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options).
+4. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options). (Detail page shell exists; real gallery still thin — separate from 5.3 Library preview.)
 5. Search and filter on all pages except `/scan`.
 6. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
 
@@ -99,4 +92,4 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 
 ## Status
 
-Stage four complete
+Stage four complete. Stage five: 5.2 tags browse done; 5.3 Library + preview mostly done (see 5.3 follow-ups). 5.1 scan UI, 5.4–5.6 not started.

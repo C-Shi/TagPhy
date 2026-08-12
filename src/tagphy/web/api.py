@@ -24,7 +24,7 @@ async def get_tag(tag_id: int):
         image_tag_ids = [child["id"] for child in tag_pictures_response["children"]]
         image_tag_ids.append(tag_id)
         # called with OR logic because image_tag_ids is a list of tag sharing the same parent
-        images = picture_helper.get_pictures_for_tags_flatted(image_tag_ids, logic="OR")
+        images = picture_helper.get_pictures_for_tags(image_tag_ids, logic="OR")
         tag_pictures_response["pictures"] = [dict(image) for image in images]
         return tag_pictures_response
     except ValueError as e:
@@ -47,7 +47,7 @@ async def get_pictures(
             descendants_ids.append(tag_id)
             # append them into separate lists
             selected_tag_ids.append(descendants_ids)
-        pictures = picture_helper.get_pictures_for_tags_flatted(
+        pictures = picture_helper.get_pictures_for_tags(
             page=pagination, tag_ids=selected_tag_ids
         )
         return pictures

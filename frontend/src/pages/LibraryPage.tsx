@@ -1,78 +1,78 @@
-import { useEffect, useMemo, useState } from 'react'
-import { fetchPictures, fetchTags } from '../api/client'
-import type { Picture, TagResponse } from '../api/types'
-import { Preview } from '../components/Preview'
-import { TagList } from '../components/TagList'
+import { useEffect, useMemo, useState } from "react";
+import { fetchPictures, fetchTags } from "../api/client";
+import type { Picture, TagResponse } from "../api/types";
+import { Preview } from "../components/Preview";
+import { TagList } from "../components/TagList";
 
 export function LibraryPage() {
-  const [tags, setTags] = useState<TagResponse[] | null>(null)
-  const [pictures, setPictures] = useState<Picture[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [picturesError, setPicturesError] = useState<string | null>(null)
+  const [tags, setTags] = useState<TagResponse[] | null>(null);
+  const [pictures, setPictures] = useState<Picture[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [picturesError, setPicturesError] = useState<string | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(
     () => new Set(),
-  )
-  const [page, setPage] = useState(1)
+  );
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    let cancelled = false
-    setError(null)
+    let cancelled = false;
+    setError(null);
     fetchTags()
       .then((data) => {
-        if (!cancelled) setTags(data)
+        if (!cancelled) setTags(data);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setTags(null)
-          setError(err instanceof Error ? err.message : 'Failed to load tags')
+          setTags(null);
+          setError(err instanceof Error ? err.message : "Failed to load tags");
         }
-      })
+      });
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    let cancelled = false
-    setPicturesError(null)
+    let cancelled = false;
+    setPicturesError(null);
     fetchPictures({
       pagination: page,
       tagIds: [...selectedTagIds],
     })
       .then((data) => {
-        if (!cancelled) setPictures(data)
+        if (!cancelled) setPictures(data);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setPictures([])
+          setPictures([]);
           setPicturesError(
-            err instanceof Error ? err.message : 'Failed to load pictures',
-          )
+            err instanceof Error ? err.message : "Failed to load pictures",
+          );
         }
-      })
+      });
     return () => {
-      cancelled = true
-    }
-  }, [selectedTagIds, page])
+      cancelled = true;
+    };
+  }, [selectedTagIds, page]);
 
   const selectedTags = useMemo(() => {
-    if (!tags) return []
-    return tags.filter((t) => selectedTagIds.has(t.id))
-  }, [tags, selectedTagIds])
+    if (!tags) return [];
+    return tags.filter((t) => selectedTagIds.has(t.id));
+  }, [tags, selectedTagIds]);
 
   function toggleSelect(tagId: number) {
-    setPage(1)
+    setPage(1);
     setSelectedTagIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId)
-      else next.add(tagId)
-      return next
-    })
+      const next = new Set(prev);
+      if (next.has(tagId)) next.delete(tagId);
+      else next.add(tagId);
+      return next;
+    });
   }
 
   function clearFilters() {
-    setPage(1)
-    setSelectedTagIds(new Set())
+    setPage(1);
+    setSelectedTagIds(new Set());
   }
 
   return (
@@ -90,7 +90,9 @@ export function LibraryPage() {
         >
           {selectedTags.length > 0 && (
             <>
-              <span className="text-sm font-medium text-ink-muted">Filters:</span>
+              <span className="text-sm font-medium text-ink-muted">
+                Filters:
+              </span>
               {selectedTags.map((tag) => (
                 <span
                   key={tag.id}
@@ -115,10 +117,10 @@ export function LibraryPage() {
         <div className="mx-4 mt-4 rounded-md border border-label-orange/40 bg-surface px-3 py-2 text-base text-ink library:mx-6">
           <span className="font-medium text-label-orange">
             Couldn’t load tags.
-          </span>{' '}
+          </span>{" "}
           <span className="text-ink-muted">
-            Is FastAPI running on port 8765 with{' '}
-            <code className="text-ink">GET /api/tags</code>?
+            Is FastAPI running on port 8765 with{" "}
+            <code className="text-ink">GET /api/library</code>?
           </span>
           <div className="mt-1 font-mono text-sm text-ink-muted">{error}</div>
         </div>
@@ -154,13 +156,9 @@ export function LibraryPage() {
             selectedTagIds={selectedTagIds}
             onToggleSelect={toggleSelect}
           />
-          <Preview
-            pictures={pictures}
-            page={page}
-            onPageChange={setPage}
-          />
+          <Preview pictures={pictures} page={page} onPageChange={setPage} />
         </div>
       )}
     </div>
-  )
+  );
 }
