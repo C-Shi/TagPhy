@@ -1,6 +1,8 @@
+from threading import Event
 import logging, os, time
 from logging import getLogger
 from pathlib import Path
+from typing import Callable
 
 from PIL import Image
 from tagphy import app_root
@@ -42,11 +44,12 @@ class ImageProcessingPipeline:
         self.image_vision = GeminiVisionEngine(db=self.db)
         self.image_storage = ImageStorage(workdir=str(self.workdir), db=self.db)
 
-    def run(self, path: str | Path):
+    def run(self, path: str | Path, should_stop: Callable = lambda: False):
         """Run the image processing pipeline on a single image or a directory of images.
 
         Args:
             path: The absolute path to the image or directory of images to process.
+            should_stop: A callable that returns True if the pipeline should stop.
         """
         target = Path(path).resolve()
         output_key = os.path.normcase(str(self.workdir))
@@ -64,15 +67,18 @@ class ImageProcessingPipeline:
             }
 
         if target.is_dir():
-            return self._run_directory(target)
-        return self._run_single(str(path))
+            return self._run_directory(target, should_stop)
+        return self._run_single(str(path), should_stop)
 
-    def _run_single(self, image_path: str):
+    def _run_single(self, image_path: str, should_stop: Callable):
         """Run the image processing pipeline on single image.
 
         Args:
             image_path: The path to the image to process.
         """
+
+        if should_stop():
+            return
 
         try:
             metadata = self.image_metadata.extract_metadata(image_path)
@@ -87,7 +93,7 @@ class ImageProcessingPipeline:
         except Exception as e:
             return self._failure(image_path, "store_image", e)
 
-    def _run_directory(self, directory_path: str | Path):
+    def _run_directory(self, directory_path: str | Path, should_stop: Callable):
         """Walk a directory once, process each image, return aggregate counts."""
         counts = {
             "total": 0,
@@ -114,7 +120,7 @@ class ImageProcessingPipeline:
                     image_path.name,
                 )
                 try:
-                    result = self._run_single(str(image_path))
+                    result = self._run_single(str(image_path), should_stop)
                 except Exception as e:
                     logger.error(
                         "Image Processing Pipeline unexpected error "
@@ -143,6 +149,9 @@ class ImageProcessingPipeline:
                         elapsed,
                         rate * 60.0,
                     )
+
+                if should_stop():
+                    return
 
         walker = os.walk(
             directory_path,

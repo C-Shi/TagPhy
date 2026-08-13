@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tagphy.pipeline import BATCH_SIZE, PROGRESS_INTERVAL, ImageProcessingPipeline
+from tagphy.tools.pipeline import BATCH_SIZE, PROGRESS_INTERVAL, ImageProcessingPipeline
 
 APP_ROOT = Path("/virtual")
 
@@ -12,10 +12,10 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     """Build a pipeline without real Gemini client or SQLiteConnection."""
     db = MagicMock()
     with (
-        patch("tagphy.pipeline.ImageMetadata") as Meta,
-        patch("tagphy.pipeline.GeminiVisionEngine") as Vision,
-        patch("tagphy.pipeline.ImageStorage") as Storage,
-        patch("tagphy.pipeline.SQLiteConnection", return_value=db),
+        patch("tagphy.tools.pipeline.ImageMetadata") as Meta,
+        patch("tagphy.tools.pipeline.GeminiVisionEngine") as Vision,
+        patch("tagphy.tools.pipeline.ImageStorage") as Storage,
+        patch("tagphy.tools.pipeline.SQLiteConnection", return_value=db),
     ):
         meta = MagicMock()
         vision = MagicMock()
@@ -56,9 +56,7 @@ class TestPipelineSuccess:
 
         meta.extract_metadata.assert_called_once_with(path)
         vision.tag_image.assert_called_once_with(path)
-        storage.store_image.assert_called_once_with(
-            path, metadata, vision_response
-        )
+        storage.store_image.assert_called_once_with(path, metadata, vision_response)
         assert result == stored
 
     def test_passes_metadata_and_vision_outputs_to_storage(self):
@@ -123,7 +121,7 @@ class TestPipelineHardStop:
 
 
 class TestFailureLogWrite:
-    @patch("tagphy.pipeline.app_root", return_value=APP_ROOT)
+    @patch("tagphy.tools.pipeline.app_root", return_value=APP_ROOT)
     def test_on_root_failure_upserts_failure_log(self, _app_root):
         pipeline, meta, vision, storage = _pipeline_with_mocks()
         path = "/virtual/inbox/broken.jpg"
@@ -146,7 +144,7 @@ class TestFailureLogWrite:
         assert kwargs["data"]["stage"] == "extract_metadata"
         assert kwargs["data"]["error_type"] == "ValueError"
 
-    @patch("tagphy.pipeline.app_root", return_value=APP_ROOT)
+    @patch("tagphy.tools.pipeline.app_root", return_value=APP_ROOT)
     def test_off_root_failure_skips_failure_log(self, _app_root):
         pipeline, meta, vision, storage = _pipeline_with_mocks()
         path = "/other/drive/broken.jpg"
@@ -438,7 +436,7 @@ class TestDirectoryScanProgress:
 
         pipeline, meta, vision, storage = _pipeline_with_mocks(workdir=workdir)
 
-        with caplog.at_level("INFO", logger="tagphy.pipeline"):
+        with caplog.at_level("INFO", logger="tagphy.tools.pipeline"):
             pipeline.run(scan_root)
 
         assert any(
@@ -460,7 +458,7 @@ class TestDirectoryScanProgress:
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
-        with caplog.at_level("INFO", logger="tagphy.pipeline"):
+        with caplog.at_level("INFO", logger="tagphy.tools.pipeline"):
             pipeline.run(scan_root)
 
         messages = [record.message for record in caplog.records]
@@ -481,7 +479,7 @@ class TestDirectoryScanProgress:
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
-        with caplog.at_level("INFO", logger="tagphy.pipeline"):
+        with caplog.at_level("INFO", logger="tagphy.tools.pipeline"):
             pipeline.run(scan_root)
 
         assert any("Progress:" in record.message for record in caplog.records)
@@ -506,7 +504,7 @@ class TestDirectoryScanProgress:
         }
         storage.store_image.return_value = {"destination_path": "ok"}
 
-        with caplog.at_level("INFO", logger="tagphy.pipeline"):
+        with caplog.at_level("INFO", logger="tagphy.tools.pipeline"):
             result = pipeline.run(scan_root)
 
         summary = next(

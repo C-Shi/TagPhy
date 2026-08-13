@@ -1,0 +1,83 @@
+import queue
+from threading import Event, Lock, Thread
+from typing import Literal
+from tagphy.tools.pipeline import ImageProcessingPipeline
+
+
+class BusyError(Exception):
+    status_code = 409
+    detail = "Job is not idle"
+
+    def __init__(self, detail: str = None):
+        self.detail = detail or self.detail
+
+    def __str__(self):
+        return self.detail
+
+
+class SingletonMeta(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+JobState = Literal["idle", "running", "stopping"]
+
+
+class ScanJobController(metaclass=SingletonMeta):
+    def __init__(self, pipeline: ImageProcessingPipeline):
+        self.pipeline = pipeline
+        self.job_queue = queue.Queue()
+        self.state: JobState = "idle"
+        self.log_history = []
+        self.log_queue = queue.Queue()
+        self.stop_event = Event()
+        self._lock = Lock()
+
+    def start(self, path: str) -> None:
+        """Claim job under Lock. Validate path. Clear ring buffer. Spawn worker.
+        Raises BusyError if not idle → route maps to 409.
+        Raises ValueError if path invalid / outside app_root / is Photo_Tagged.
+        """
+
+        def _worker():
+            try:
+                self.pipeline.run(path, self.stop_event.is_set)
+            finally:
+                self.state = "idle"
+
+        with self._lock:
+            if self.state != "idle":
+                raise BusyError(f"A Scan job is currently in {self.state}")
+
+            self.stop_event.clear()
+            self.state = "running"
+            # start in a separate thread to avoid blocking any other method calls
+            Thread(target=_worker, daemon=True).start()
+
+    def stop(self) -> None:
+        """If running, set Event and move to stopping.
+        If idle: no-op or raise — recommend no-op (idempotent).
+        """
+
+        with self._lock:
+            if self.state == "idle":
+                return
+
+            self.stop_event.set()
+            self.state = "stopping"
+
+    def get_state(self) -> dict:
+        """Snapshot for WS on connect / HTTP if needed.
+        e.g. {"status": "idle"|"running"|"stopping", "path": str|None}
+        """
+
+    def iter_log_history(self) -> list[dict]:
+        """Copy of ring buffer for reconnect."""
+
+    # used by WS loop (or controller owns a subscribe helper)
+    def get_log_queue(self) -> queue.Queue:
+        pass
