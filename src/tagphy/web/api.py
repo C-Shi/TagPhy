@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, status, Response, Query
+from fastapi import APIRouter, Body, HTTPException, status, Response, Query
 from typing import Annotated
 from tagphy.db import SQLiteConnection
 from tagphy.web.utils.tag_helper import TagHelper
 from tagphy.web.utils.picture_helper import PictureHelper
+from tagphy.tools.scan_job import ScanJobController, BusyError
+from tagphy.tools.pipeline import ImageProcessingPipeline
 
 router = APIRouter(prefix="/api")
 tag_helper = TagHelper(db=SQLiteConnection())
 picture_helper = PictureHelper(db=SQLiteConnection())
+scan_job = ScanJobController(ImageProcessingPipeline())
 
 
 # Tag Routes
@@ -64,3 +67,25 @@ async def get_picture_preview(picture_id: int):
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# Scan Routes
+@router.post("/scan")
+async def scan(path: str = Body(..., embed=True, description="The path to scan")):
+    try:
+        scan_job.start(path)
+        return {"detail": "Scan job started"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except BusyError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/scan_stop")
+async def scan_stop():
+    result = scan_job.stop()
+
+    if result.get("status") == "stopping":
+        return {"detail": "Scan job has been cancelled"}
+    else:
+        return {"detail": "No active scan job"}

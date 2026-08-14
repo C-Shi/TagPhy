@@ -1,4 +1,3 @@
-from threading import Event
 import logging, os, time
 from logging import getLogger
 from pathlib import Path
@@ -44,6 +43,20 @@ class ImageProcessingPipeline:
         self.image_vision = GeminiVisionEngine(db=self.db)
         self.image_storage = ImageStorage(workdir=str(self.workdir), db=self.db)
 
+    def validate_path(self, path: str | Path) -> bool:
+        """Validate the path is a valid image or directory.
+
+        Args:
+            path: The path to validate.
+        """
+        target = Path(path).resolve()
+        output_key = os.path.normcase(str(self.workdir))
+        target_key = os.path.normcase(str(target))
+
+        if target_key == output_key or target_key.startswith(output_key + os.sep):
+            return False
+        return True
+
     def run(self, path: str | Path, should_stop: Callable = lambda: False):
         """Run the image processing pipeline on a single image or a directory of images.
 
@@ -52,12 +65,8 @@ class ImageProcessingPipeline:
             should_stop: A callable that returns True if the pipeline should stop.
         """
         target = Path(path).resolve()
-        output_key = os.path.normcase(str(self.workdir))
-        target_key = os.path.normcase(str(target))
 
-        if target_key == output_key or target_key.startswith(output_key + os.sep):
-            # Choose not to enter _failure DB Write. Because out of scope image cannot be processed.
-            # _failure is for internal error handling not for use-case level rejection
+        if not self.validate_path(target):
             logger.error("Target is the output directory or inside it")
             return {
                 "status": "fail",
@@ -113,6 +122,8 @@ class ImageProcessingPipeline:
 
         def process_batch(paths: list[Path]) -> None:
             for image_path in paths:
+                if should_stop():
+                    return
                 counts["total"] += 1
                 logger.info(
                     "Processing image %s: %s",
@@ -150,9 +161,6 @@ class ImageProcessingPipeline:
                         rate * 60.0,
                     )
 
-                if should_stop():
-                    return
-
         walker = os.walk(
             directory_path,
             onerror=lambda err: logger.warning(f"Skipping unreadable directory: {err}"),
@@ -172,9 +180,13 @@ class ImageProcessingPipeline:
                 if len(batch) >= BATCH_SIZE:
                     process_batch(batch)
                     batch.clear()
+                if should_stop():
+                    return
 
         if batch:
             process_batch(batch)
+            if should_stop():
+                return
 
         elapsed = time.monotonic() - started_at
         logger.info(

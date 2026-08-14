@@ -47,16 +47,22 @@ class ScanJobController(metaclass=SingletonMeta):
             try:
                 self.pipeline.run(path, self.stop_event.is_set)
             finally:
-                self.state = "idle"
+                with self._lock:
+                    self.state = "idle"
 
         with self._lock:
             if self.state != "idle":
                 raise BusyError(f"A Scan job is currently in {self.state}")
 
+            if not self.pipeline.validate_path(path):
+                raise ValueError("Target is the output directory or inside it")
+
             self.stop_event.clear()
             self.state = "running"
             # start in a separate thread to avoid blocking any other method calls
             Thread(target=_worker, daemon=True).start()
+
+            return {"status": self.state}
 
     def stop(self) -> None:
         """If running, set Event and move to stopping.
@@ -65,10 +71,11 @@ class ScanJobController(metaclass=SingletonMeta):
 
         with self._lock:
             if self.state == "idle":
-                return
+                return {"status": self.state}
 
             self.stop_event.set()
             self.state = "stopping"
+            return {"status": self.state}
 
     def get_state(self) -> dict:
         """Snapshot for WS on connect / HTTP if needed.
