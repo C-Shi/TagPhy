@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from tagphy.db.connection import SQLiteConnection
 from tagphy.web.api import router as api_router
+from tagphy.web.ws import router as ws_router
 
 
 @asynccontextmanager
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TagPhy", lifespan=lifespan)
 app.include_router(api_router)
+app.include_router(ws_router)
 
 
 @app.get("/")
