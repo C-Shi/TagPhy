@@ -1,6 +1,6 @@
 import queue
 from threading import Event, Lock, Thread
-from typing import Literal
+from typing import Literal, TypedDict
 from tagphy.tools.pipeline import ImageProcessingPipeline
 
 
@@ -27,6 +27,12 @@ class SingletonMeta(type):
 JobState = Literal["idle", "running", "stopping"]
 
 
+class ScanLog(TypedDict):
+    status: Literal["success", "fail"]
+    stage: str
+    msg: str
+
+
 class ScanJobController(metaclass=SingletonMeta):
     def __init__(self, pipeline: ImageProcessingPipeline):
         self.pipeline = pipeline
@@ -34,6 +40,14 @@ class ScanJobController(metaclass=SingletonMeta):
         self.log_queue = queue.Queue()
         self.stop_event = Event()
         self._lock = Lock()
+
+    @property
+    def scan_logs(self) -> queue.Queue[ScanLog]:
+        return self.log_queue
+
+    @property
+    def job_state(self) -> JobState:
+        return self.state
 
     def start(self, path: str) -> None:
         """Claim job under Lock. Validate path. Clear ring buffer. Spawn worker.
@@ -82,20 +96,11 @@ class ScanJobController(metaclass=SingletonMeta):
             self.state = "stopping"
             return {"status": self.state}
 
-    def get_state(self) -> dict:
-        """Snapshot for WS on connect / HTTP if needed.
-        e.g. {"status": "idle"|"running"|"stopping", "path": str|None}
-        """
-
     def iter_log_history(self) -> list[dict]:
         """Copy of ring buffer for reconnect."""
 
-    def _enqueue(self, message: dict) -> None:
+    def _enqueue(self, message: ScanLog) -> None:
         with self._lock:
             self.log_queue.put(message)
             if self.log_queue.qsize() > 100:
                 self.log_queue.get()
-
-    # used by WS loop (or controller owns a subscribe helper)
-    def get_log_queue(self) -> queue.Queue:
-        pass

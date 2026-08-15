@@ -93,7 +93,12 @@ class ImageProcessingPipeline:
         # choose not to have on_progress for single image processing. If directly, handle inside _run_directory but outside of _run_single
         return self._run_single(str(path), should_stop)
 
-    def _run_single(self, image_path: str, should_stop: Callable):
+    def _run_single(
+        self,
+        image_path: str,
+        should_stop: Callable,
+        on_progress: Callable | None = None,
+    ):
         """Run the image processing pipeline on single image.
 
         Args:
@@ -102,6 +107,15 @@ class ImageProcessingPipeline:
 
         if should_stop():
             return
+
+        if on_progress:
+            on_progress(
+                {
+                    "status": "running",
+                    "stage": "run",
+                    "msg": f"Processing image: {image_path}",
+                }
+            )
 
         try:
             metadata = self.image_metadata.extract_metadata(image_path)
@@ -159,7 +173,7 @@ class ImageProcessingPipeline:
                     image_path.name,
                 )
                 try:
-                    result = self._run_single(str(image_path), should_stop)
+                    result = self._run_single(str(image_path), should_stop, on_progress)
                 except Exception as e:
                     logger.error(
                         "Image Processing Pipeline unexpected error "
