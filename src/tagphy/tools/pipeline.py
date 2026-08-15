@@ -57,7 +57,12 @@ class ImageProcessingPipeline:
             return False
         return True
 
-    def run(self, path: str | Path, should_stop: Callable = lambda: False):
+    def run(
+        self,
+        path: str | Path,
+        should_stop: Callable = lambda: False,
+        on_progress: Callable | None = None,
+    ):
         """Run the image processing pipeline on a single image or a directory of images.
 
         Args:
@@ -68,15 +73,24 @@ class ImageProcessingPipeline:
 
         if not self.validate_path(target):
             logger.error("Target is the output directory or inside it")
+            if on_progress:
+                on_progress(
+                    {
+                        "status": "fail",
+                        "stage": "run",
+                        "msg": "Target is the output directory or inside it",
+                    }
+                )
             return {
                 "status": "fail",
                 "stage": "run",
-                "image": target.name,
-                "error": "Target is the output directory or inside it",
+                "msg": "Target is the output directory or inside it",
             }
 
         if target.is_dir():
-            return self._run_directory(target, should_stop)
+            return self._run_directory(target, should_stop, on_progress)
+
+        # choose not to have on_progress for single image processing. If directly, handle inside _run_directory but outside of _run_single
         return self._run_single(str(path), should_stop)
 
     def _run_single(self, image_path: str, should_stop: Callable):
@@ -102,7 +116,12 @@ class ImageProcessingPipeline:
         except Exception as e:
             return self._failure(image_path, "store_image", e)
 
-    def _run_directory(self, directory_path: str | Path, should_stop: Callable):
+    def _run_directory(
+        self,
+        directory_path: str | Path,
+        should_stop: Callable,
+        on_progress: Callable | None = None,
+    ):
         """Walk a directory once, process each image, return aggregate counts."""
         counts = {
             "total": 0,
@@ -119,6 +138,15 @@ class ImageProcessingPipeline:
             directory_path,
             self.workdir,
         )
+
+        if on_progress:
+            on_progress(
+                {
+                    "status": "start",
+                    "stage": "run",
+                    "msg": f"Starting directory scan: path={directory_path} output={self.workdir}",
+                }
+            )
 
         def process_batch(paths: list[Path]) -> None:
             for image_path in paths:
@@ -137,6 +165,14 @@ class ImageProcessingPipeline:
                         "Image Processing Pipeline unexpected error "
                         f"on {image_path}: {e}"
                     )
+                    if on_progress:
+                        on_progress(
+                            {
+                                "status": "fail",
+                                "stage": "run",
+                                "msg": f"Image Processing Pipeline unexpected error on {image_path}: {e}",
+                            }
+                        )
                     counts["failed"] += 1
                     continue
 
@@ -160,6 +196,14 @@ class ImageProcessingPipeline:
                         elapsed,
                         rate * 60.0,
                     )
+                    if on_progress:
+                        on_progress(
+                            {
+                                "status": "progress",
+                                "stage": "run",
+                                "msg": f"Progress: total={counts['total']} succeeded={counts['succeeded']} failed={counts['failed']} skipped={counts['skipped']} elapsed={elapsed:.1f}s rate={rate * 60.0:.1f} images/min",
+                            }
+                        )
 
         walker = os.walk(
             directory_path,
@@ -198,6 +242,14 @@ class ImageProcessingPipeline:
             counts["skipped"],
             elapsed,
         )
+        if on_progress:
+            on_progress(
+                {
+                    "status": "complete",
+                    "stage": "run",
+                    "msg": f"Directory scan complete: total={counts['total']} succeeded={counts['succeeded']} failed={counts['failed']} skipped={counts['skipped']} elapsed={elapsed:.1f}s",
+                }
+            )
         return counts
 
     def _failure(self, image_path: str | Path, stage: str, error: Exception):

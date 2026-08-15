@@ -30,9 +30,7 @@ JobState = Literal["idle", "running", "stopping"]
 class ScanJobController(metaclass=SingletonMeta):
     def __init__(self, pipeline: ImageProcessingPipeline):
         self.pipeline = pipeline
-        self.job_queue = queue.Queue()
         self.state: JobState = "idle"
-        self.log_history = []
         self.log_queue = queue.Queue()
         self.stop_event = Event()
         self._lock = Lock()
@@ -45,7 +43,14 @@ class ScanJobController(metaclass=SingletonMeta):
 
         def _worker():
             try:
-                self.pipeline.run(path, self.stop_event.is_set)
+                # If a locker can start, recreate a new queue for this job
+                while not self.log_queue.empty():
+                    self.log_queue.get_nowait()
+                self.pipeline.run(
+                    path=path,
+                    should_stop=self.stop_event.is_set,
+                    on_progress=self._enqueue,
+                )
             finally:
                 with self._lock:
                     self.state = "idle"
@@ -84,6 +89,12 @@ class ScanJobController(metaclass=SingletonMeta):
 
     def iter_log_history(self) -> list[dict]:
         """Copy of ring buffer for reconnect."""
+
+    def _enqueue(self, message: dict) -> None:
+        with self._lock:
+            self.log_queue.put(message)
+            if self.log_queue.qsize() > 100:
+                self.log_queue.get()
 
     # used by WS loop (or controller owns a subscribe helper)
     def get_log_queue(self) -> queue.Queue:
