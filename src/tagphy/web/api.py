@@ -3,6 +3,7 @@ from typing import Annotated
 from tagphy.db import SQLiteConnection
 from tagphy.web.utils.tag_helper import TagHelper
 from tagphy.web.utils.picture_helper import PictureHelper
+from tagphy.web.utils.browse_helper import BrowseHelper
 from tagphy.tools.scan_job import ScanJobController, BusyError
 from tagphy.tools.pipeline import ImageProcessingPipeline
 
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/api")
 tag_helper = TagHelper(db=SQLiteConnection())
 picture_helper = PictureHelper(db=SQLiteConnection())
 scan_job = ScanJobController(ImageProcessingPipeline())
+browse_helper = BrowseHelper()
 
 
 # Tag Routes
@@ -70,6 +72,14 @@ async def get_picture_preview(picture_id: int):
 
 
 # Scan Routes
+@router.get("/scan/browse")
+async def scan_browse(path: str = ""):
+    try:
+        return browse_helper.list_directory(path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/scan")
 async def scan(path: str = Body(..., embed=True, description="The path to scan")):
     try:

@@ -20,8 +20,18 @@ export async function stopScan(): Promise<void> {
  * Hide Photo_Tagged on the backend; FE renders whatever is returned.
  */
 export async function fetchBrowse(path: string): Promise<BrowseResponse> {
-  // TODO: fetch(`/api/scan/browse?path=${encodeURIComponent(path)}`)
-  return { current: path, parent: null, entries: [] }
+  const search = new URLSearchParams()
+  search.set("path", path)
+  const res = await fetch(`/api/scan/browse?${search.toString()}`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(
+      body
+        ? `API ${res.status}: ${body}`
+        : `API request failed (${res.status} ${res.statusText})`,
+    )
+  }
+  return res.json() as Promise<BrowseResponse>
 }
 
 /**
