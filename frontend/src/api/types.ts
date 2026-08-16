@@ -54,6 +54,12 @@ export type Picture = {
 /** idle | running | stopping — matches ScanJobController. */
 export type ScanJobStatus = "idle" | "running" | "stopping"
 
+/** Body for POST /api/scan, POST /api/scan_stop, GET /api/scan/status. */
+export type ScanStatusResponse = {
+  status: ScanJobStatus
+  message?: string
+}
+
 /**
  * Line from WS /ws/scan_log (backend ScanLog).
  * FE colors: fail = orange, warn = yellow, info = muted, summary = accent.

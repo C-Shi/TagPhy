@@ -1,18 +1,43 @@
-import type { BrowseResponse, ScanLog } from "./types"
+import type { BrowseResponse, ScanLog, ScanStatusResponse } from "./types"
+
+async function parseScanStatusResponse(response: Response): Promise<ScanStatusResponse> {
+  const body = (await response.json()) as ScanStatusResponse & { detail?: string }
+  if (!response.ok) {
+    throw new Error(body.message || body.detail || "Scan request failed")
+  }
+  return body
+}
 
 /**
  * POST /api/scan
  * body: { path: string }
+ * success/error body: { status: "idle"|"running"|"stopping", message?: string }
  */
-export async function startScan(_path: string): Promise<void> {
-  // TODO: fetch('/api/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) })
+export async function startScan(path: string): Promise<ScanStatusResponse> {
+  const response = await fetch("/api/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  })
+  return parseScanStatusResponse(response)
 }
 
 /**
  * POST /api/scan_stop
+ * success body: { status: "idle"|"stopping" }
  */
-export async function stopScan(): Promise<void> {
-  // TODO: fetch('/api/scan_stop', { method: 'POST' })
+export async function stopScan(): Promise<ScanStatusResponse> {
+  const response = await fetch("/api/scan_stop", { method: "POST" })
+  return parseScanStatusResponse(response)
+}
+
+/**
+ * GET /api/scan/status
+ * success body: { status: "idle"|"running"|"stopping" }
+ */
+export async function getScanStatus(): Promise<ScanStatusResponse> {
+  const response = await fetch("/api/scan/status")
+  return parseScanStatusResponse(response)
 }
 
 /**
@@ -39,11 +64,19 @@ export async function fetchBrowse(path: string): Promise<BrowseResponse> {
  * Returns an unsubscribe function.
  */
 export function connectScanLog(
-  _onMessage: (log: ScanLog) => void,
+  onMessage: (log: ScanLog) => void,
   _onClose?: () => void,
 ): () => void {
-  // TODO: const ws = new WebSocket(...)
-  // TODO: ws.onmessage = (ev) => onMessage(JSON.parse(ev.data))
-  // TODO: return () => ws.close()
-  return () => { }
+  const ws = new WebSocket("/ws/scan_log")
+  ws.onmessage = (ev) => {
+    try {
+      const log = JSON.parse(ev.data)
+      onMessage(log)
+    } catch (error) {
+      console.error("Failed to parse scan log", error)
+    }
+  }
+  return () => {
+    ws.close()
+  }
 }

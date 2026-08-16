@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Body, HTTPException, status, Response, Query
+from fastapi.responses import JSONResponse
 from typing import Annotated
 from tagphy.db import SQLiteConnection
 from tagphy.web.utils.tag_helper import TagHelper
@@ -83,19 +84,24 @@ async def scan_browse(path: str = ""):
 @router.post("/scan")
 async def scan(path: str = Body(..., embed=True, description="The path to scan")):
     try:
-        scan_job.start(path)
-        return {"detail": "Scan job started"}
+        return scan_job.start(path)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": scan_job.job_state, "message": str(e)},
+        )
     except BusyError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"status": scan_job.job_state, "message": str(e)},
+        )
 
 
 @router.post("/scan_stop")
 async def scan_stop():
-    result = scan_job.stop()
+    return scan_job.stop()
 
-    if result.get("status") == "stopping":
-        return {"detail": "Scan job has been cancelled"}
-    else:
-        return {"detail": "No active scan job"}
+
+@router.get("/scan/status")
+async def scan_status():
+    return {"status": scan_job.job_state}

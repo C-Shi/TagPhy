@@ -1,12 +1,13 @@
-import type { ScanLog, ScanLogLevel } from "../api/types"
+import type { ScanLog, ScanLogLevel } from "../api/types";
 
 function logLevel(log: ScanLog): ScanLogLevel {
-  const status = (log.status || "").toLowerCase()
-  if (status === "fail" || status === "error") return "fail"
-  if (status === "warn" || status === "skip" || status === "warning") return "warn"
+  const status = (log.status || "").toLowerCase();
+  if (status === "fail" || status === "error") return "fail";
+  if (status === "warn" || status === "skip" || status === "warning")
+    return "warn";
   if (status === "complete" || status === "summary" || status === "success")
-    return "summary"
-  return "info"
+    return "summary";
+  return "info";
 }
 
 const levelClass: Record<ScanLogLevel, string> = {
@@ -14,11 +15,11 @@ const levelClass: Record<ScanLogLevel, string> = {
   warn: "text-label-yellow",
   summary: "text-accent",
   info: "text-ink-muted",
-}
+};
 
 type ScanLogPanelProps = {
-  logs: ScanLog[]
-}
+  logs: ScanLog[];
+};
 
 export function ScanLogPanel({ logs }: ScanLogPanelProps) {
   return (
@@ -31,9 +32,7 @@ export function ScanLogPanel({ logs }: ScanLogPanelProps) {
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-3 py-3 font-mono text-sm">
         {logs.length === 0 ? (
-          <p className="text-ink-muted">
-            Idle — log appears when a scan runs.
-          </p>
+          <p className="text-ink-muted">Idle — log appears when a scan runs.</p>
         ) : (
           <ul className="space-y-1">
             {logs.map((log, i) => (
@@ -45,5 +44,5 @@ export function ScanLogPanel({ logs }: ScanLogPanelProps) {
         )}
       </div>
     </section>
-  )
+  );
 }

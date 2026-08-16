@@ -1,78 +1,99 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react";
 import {
   connectScanLog,
   startScan,
   stopScan,
-} from "../api/scan"
-import type { ScanJobStatus, ScanLog } from "../api/types"
-import { BrowseModal } from "../components/BrowseModal"
-import { ConfirmModal } from "../components/ConfirmModal"
-import { ScanLogPanel } from "../components/ScanLog"
-import { useScanLock } from "../components/ScanLockContext"
+  getScanStatus,
+} from "../api/scan";
+import type { ScanJobStatus, ScanLog } from "../api/types";
+import { BrowseModal } from "../components/BrowseModal";
+import { ConfirmModal } from "../components/ConfirmModal";
+import { ScanLogPanel } from "../components/ScanLog";
+import { useScanLock } from "../components/ScanLockContext";
 
 function isBusy(status: ScanJobStatus) {
-  return status === "running" || status === "stopping"
+  return status === "running" || status === "stopping";
 }
 
 export function ScanPage() {
-  const { setScanLocked } = useScanLock()
-  const [path, setPath] = useState("")
-  const [jobStatus, setJobStatus] = useState<ScanJobStatus>("idle")
-  const [logs, setLogs] = useState<ScanLog[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [browseOpen, setBrowseOpen] = useState(false)
-  const [scanConfirmOpen, setScanConfirmOpen] = useState(false)
-  const [stopConfirmOpen, setStopConfirmOpen] = useState(false)
-  const jobStatusRef = useRef(jobStatus)
-  jobStatusRef.current = jobStatus
+  const { setScanLocked } = useScanLock();
+  const [path, setPath] = useState("");
+  const [jobStatus, setJobStatus] = useState<ScanJobStatus>("idle");
+  const [logs, setLogs] = useState<ScanLog[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [scanConfirmOpen, setScanConfirmOpen] = useState(false);
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const jobStatusRef = useRef(jobStatus);
+  const checkStatusIntervalRef = useRef<number | null>(null);
+  jobStatusRef.current = jobStatus;
 
   useEffect(() => {
-    setScanLocked(isBusy(jobStatus))
-  }, [jobStatus, setScanLocked])
+    setScanLocked(isBusy(jobStatus));
+  }, [jobStatus, setScanLocked]);
 
   useEffect(() => {
-    return () => setScanLocked(false)
-  }, [setScanLocked])
+    return () => setScanLocked(false);
+  }, [setScanLocked]);
 
   useEffect(() => {
     const unsubscribe = connectScanLog((log) => {
-      setLogs((prev) => [...prev, log])
-      const status = (log.status || "").toLowerCase()
+      setLogs((prev) => [...prev, log]);
+      const status = (log.status || "").toLowerCase();
       if (status === "complete" || status === "summary" || status === "idle") {
         if (jobStatusRef.current !== "idle") {
-          setPath("")
-          setJobStatus("idle")
+          setPath("");
+          setJobStatus("idle");
         }
       }
-    })
-    return unsubscribe
-  }, [])
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (checkStatusIntervalRef.current) {
+        clearInterval(checkStatusIntervalRef.current);
+        checkStatusIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   async function onConfirmScan() {
-    if (!path || isBusy(jobStatus)) return
-    setScanConfirmOpen(false)
-    setError(null)
-    setLogs([])
+    if (!path || isBusy(jobStatus)) return;
+    setScanConfirmOpen(false);
+    setError(null);
+    setLogs([]);
     try {
-      await startScan(path)
-      setJobStatus("running")
+      const { status } = await startScan(path);
+      setJobStatus(status);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to start scan")
+      setError(err instanceof Error ? err.message : "Failed to start scan");
     }
   }
 
   async function onConfirmStop() {
-    setStopConfirmOpen(false)
-    setError(null)
+    setStopConfirmOpen(false);
+    setError(null);
     try {
-      await stopScan()
-      setJobStatus("stopping")
+      const { status } = await stopScan();
+      setJobStatus(status as ScanJobStatus);
+
+      checkStatusIntervalRef.current = setInterval(async () => {
+        const { status } = await getScanStatus();
+        setJobStatus(status as ScanJobStatus);
+
+        if (status === "idle") {
+          clearInterval(checkStatusIntervalRef.current!);
+          checkStatusIntervalRef.current = null;
+        }
+      }, 1000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to stop scan")
+      setError(err instanceof Error ? err.message : "Failed to stop scan");
     }
   }
 
-  const busy = isBusy(jobStatus)
+  const busy = isBusy(jobStatus);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -136,8 +157,8 @@ export function ScanPage() {
         <BrowseModal
           onClose={() => setBrowseOpen(false)}
           onSelect={(selected) => {
-            setPath(selected)
-            setBrowseOpen(false)
+            setPath(selected);
+            setBrowseOpen(false);
           }}
         />
       )}
@@ -162,5 +183,5 @@ export function ScanPage() {
         />
       )}
     </div>
-  )
+  );
 }
