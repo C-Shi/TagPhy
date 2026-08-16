@@ -50,3 +50,31 @@ export type Picture = {
   created_at: string
   updated_at: string
 }
+
+/** idle | running | stopping — matches ScanJobController. */
+export type ScanJobStatus = "idle" | "running" | "stopping"
+
+/**
+ * Line from WS /ws/scan_log (backend ScanLog).
+ * FE colors: fail = orange, warn = yellow, info = muted, summary = accent.
+ */
+export type ScanLogLevel = "info" | "warn" | "fail" | "summary"
+
+export type ScanLog = {
+  status: string
+  stage: string
+  msg: string
+}
+
+/** GET /api/scan/browse?path= (backend not built yet). */
+export type BrowseEntry = {
+  name: string
+  type: "dir" | "file"
+  path: string
+}
+
+export type BrowseResponse = {
+  current: string
+  parent: string | null
+  entries: BrowseEntry[]
+}
