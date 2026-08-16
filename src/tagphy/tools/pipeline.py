@@ -162,6 +162,33 @@ class ImageProcessingPipeline:
                 }
             )
 
+        def emit_summary(*, cancelled: bool = False):
+            elapsed = time.monotonic() - started_at
+            label = "cancelled" if cancelled else "complete"
+            logger.info(
+                "Directory scan %s: total=%s succeeded=%s failed=%s skipped=%s "
+                "elapsed=%.1fs",
+                label,
+                counts["total"],
+                counts["succeeded"],
+                counts["failed"],
+                counts["skipped"],
+                elapsed,
+            )
+            if on_progress:
+                on_progress(
+                    {
+                        "status": "complete",
+                        "stage": "run",
+                        "msg": (
+                            f"Directory scan {label}: total={counts['total']} "
+                            f"succeeded={counts['succeeded']} failed={counts['failed']} "
+                            f"skipped={counts['skipped']} elapsed={elapsed:.1f}s"
+                        ),
+                    }
+                )
+            return counts
+
         def process_batch(paths: list[Path]) -> None:
             for image_path in paths:
                 if should_stop():
@@ -239,32 +266,14 @@ class ImageProcessingPipeline:
                     process_batch(batch)
                     batch.clear()
                 if should_stop():
-                    return
+                    return emit_summary(cancelled=True)
 
         if batch:
             process_batch(batch)
             if should_stop():
-                return
+                return emit_summary(cancelled=True)
 
-        elapsed = time.monotonic() - started_at
-        logger.info(
-            "Directory scan complete: total=%s succeeded=%s failed=%s skipped=%s "
-            "elapsed=%.1fs",
-            counts["total"],
-            counts["succeeded"],
-            counts["failed"],
-            counts["skipped"],
-            elapsed,
-        )
-        if on_progress:
-            on_progress(
-                {
-                    "status": "complete",
-                    "stage": "run",
-                    "msg": f"Directory scan complete: total={counts['total']} succeeded={counts['succeeded']} failed={counts['failed']} skipped={counts['skipped']} elapsed={elapsed:.1f}s",
-                }
-            )
-        return counts
+        return emit_summary()
 
     def _failure(self, image_path: str | Path, stage: str, error: Exception):
         """Handle the failure of a stage.

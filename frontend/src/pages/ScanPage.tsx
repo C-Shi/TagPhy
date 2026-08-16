@@ -88,6 +88,7 @@ export function ScanPage() {
           checkStatusIntervalRef.current = null;
         }
       }, 1000);
+      setPath("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to stop scan");
     }
