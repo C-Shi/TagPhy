@@ -1,79 +1,79 @@
-import { useEffect, useMemo, useState } from "react"
-import { fetchBrowse } from "../api/scan"
-import type { BrowseEntry, BrowseResponse } from "../api/types"
+import { useEffect, useMemo, useState } from "react";
+import { fetchBrowse } from "../api/scan";
+import type { BrowseEntry, BrowseResponse } from "../api/types";
 
 type BrowseModalProps = {
-  onClose: () => void
-  onSelect: (path: string) => void
-}
+  onClose: () => void;
+  onSelect: (path: string) => void;
+};
 
 function pathCrumbs(current: string): { label: string; path: string }[] {
-  const parts = current.split("/").filter(Boolean)
-  const crumbs: { label: string; path: string }[] = []
-  let acc = current.startsWith("/") ? "" : ""
+  const parts = current.split("/").filter(Boolean);
+  const crumbs: { label: string; path: string }[] = [];
+  let acc = current.startsWith("/") ? "" : "";
   for (const part of parts) {
-    acc += `/${part}`
-    crumbs.push({ label: part, path: acc })
+    acc += `/${part}`;
+    crumbs.push({ label: part, path: acc });
   }
-  return crumbs
+  return crumbs;
 }
 
 function sortEntries(entries: BrowseEntry[]): BrowseEntry[] {
   return [...entries].sort((a, b) => {
-    if (a.type !== b.type) return a.type === "dir" ? -1 : 1
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-  })
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  });
 }
 
 export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
-  const [browse, setBrowse] = useState<BrowseResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<BrowseEntry | null>(null)
+  const [browse, setBrowse] = useState<BrowseResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<BrowseEntry | null>(null);
 
   function load(path: string) {
-    setError(null)
-    setSelected(null)
+    setError(null);
+    setSelected(null);
     fetchBrowse(path)
       .then(setBrowse)
       .catch((err: unknown) => {
-        setBrowse(null)
-        setError(err instanceof Error ? err.message : "Failed to browse")
-      })
+        setBrowse(null);
+        setError(err instanceof Error ? err.message : "Failed to browse");
+      });
   }
 
   useEffect(() => {
-    load("")
-  }, [])
+    load("");
+  }, []);
 
   const entries = useMemo(
     () => (browse ? sortEntries(browse.entries) : []),
     [browse],
-  )
-  const crumbs = browse ? pathCrumbs(browse.current) : []
+  );
+  const crumbs = browse ? pathCrumbs(browse.current) : [];
 
   function onEntryClick(entry: BrowseEntry) {
-    setSelected(entry)
+    setSelected(entry);
   }
 
   function onEntryOpen(entry: BrowseEntry) {
     if (entry.type === "dir") {
-      load(entry.path)
-      return
+      load(entry.path);
+      return;
     }
-    onSelect(entry.path)
+    onSelect(entry.path);
   }
 
   function onOpen() {
-    if (!browse) return
+    if (!browse) return;
     if (selected?.type === "file") {
-      onSelect(selected.path)
-      return
+      onSelect(selected.path);
+      return;
     }
     if (selected?.type === "dir") {
-      load(selected.path)
-      return
+      load(selected.path);
+      return;
     }
-    onSelect(browse.current)
+    onSelect(browse.current);
   }
 
   const openLabel =
@@ -81,7 +81,7 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
       ? "Open"
       : selected?.type === "dir"
         ? "Open"
-        : "Select this folder"
+        : "Select this folder";
 
   return (
     <div
@@ -101,7 +101,7 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
           <button
             type="button"
             disabled={!browse || browse.parent === null}
-            onClick={() => browse?.parent !== null && load(browse.parent)}
+            onClick={() => browse?.parent !== null && load(browse!.parent)}
             className="inline-flex h-8 w-8 items-center justify-center rounded border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Back"
             title="Back"
@@ -113,7 +113,10 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
             aria-label="Path"
           >
             {crumbs.map((crumb, i) => (
-              <span key={crumb.path} className="flex shrink-0 items-center gap-1">
+              <span
+                key={crumb.path}
+                className="flex shrink-0 items-center gap-1"
+              >
                 {i > 0 && (
                   <i
                     className="fa-solid fa-chevron-right text-[0.65rem] text-ink-muted"
@@ -131,6 +134,19 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
             ))}
           </nav>
         </div>
+
+        {browse && !browse.is_under_root && (
+          <div
+            className="shrink-0 border-b border-label-orange/40 bg-accent-soft px-3 py-2 text-sm"
+            role="status"
+          >
+            <span className="font-medium text-label-orange">Outside app folder. </span>
+            <span className="text-ink-muted">
+              You can still scan here. Tagged files will be moved into this
+              app's Photo_Tagged folder.
+            </span>
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-auto bg-surface">
           {error && (
@@ -156,7 +172,7 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
               </thead>
               <tbody>
                 {entries.map((entry) => {
-                  const isSelected = selected?.path === entry.path
+                  const isSelected = selected?.path === entry.path;
                   return (
                     <tr
                       key={entry.path}
@@ -179,7 +195,9 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
                                 ? "fa-solid fa-folder w-4 shrink-0 text-label-yellow"
                                 : "fa-solid fa-file-image w-4 shrink-0 text-label-blue"
                             }
-                            style={isSelected ? { color: "inherit" } : undefined}
+                            style={
+                              isSelected ? { color: "inherit" } : undefined
+                            }
                             aria-hidden
                           />
                           <span className="truncate">{entry.name}</span>
@@ -191,7 +209,7 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
                         {entry.type === "dir" ? "Folder" : "Image"}
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -217,5 +235,5 @@ export function BrowseModal({ onClose, onSelect }: BrowseModalProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

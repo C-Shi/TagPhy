@@ -45,5 +45,5 @@ export function connectScanLog(
   // TODO: const ws = new WebSocket(...)
   // TODO: ws.onmessage = (ev) => onMessage(JSON.parse(ev.data))
   // TODO: return () => ws.close()
-  return () => {}
+  return () => { }
 }

@@ -12,7 +12,8 @@ class BrowseHelper:
         self.root = Path(root).resolve() if root else app_root()
 
     def list_directory(self, path: str = "") -> dict:
-        current = self._resolve_under_root(path)
+
+        current, is_under_root = self._resolve_under_root(path)
         if not current.is_dir():
             raise ValueError("Path is not a directory")
         if self._is_output_dir(current):
@@ -48,30 +49,29 @@ class BrowseHelper:
             except OSError:
                 continue
 
-        parent = None
-        if current != self.root:
-            parent = current.parent.as_posix()
+        parent = current.parent.as_posix()
 
         return {
             "current": current.as_posix(),
             "parent": parent,
             "entries": entries,
+            "is_under_root": is_under_root,
         }
 
-    def _resolve_under_root(self, path: str) -> Path:
+    def _resolve_under_root(self, path: str) -> tuple[Path, bool]:
         if not path:
-            return self.root
+            return self.root, True
         candidate = Path(path)
         if not candidate.is_absolute():
             candidate = self.root / candidate
         candidate = candidate.resolve()
+        if not candidate.exists():
+            raise ValueError("Path does not exist")
         try:
             candidate.relative_to(self.root)
         except ValueError as e:
-            raise ValueError("Path is outside the app root") from e
-        if not candidate.exists():
-            raise ValueError("Path does not exist")
-        return candidate
+            return (candidate, False)
+        return (candidate, True)
 
     def _is_output_dir(self, current: Path) -> bool:
         output = (self.root / DEFAULT_OUTPUT_DIR_NAME).resolve()

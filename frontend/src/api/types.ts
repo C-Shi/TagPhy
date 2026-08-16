@@ -77,4 +77,5 @@ export type BrowseResponse = {
   current: string
   parent: string | null
   entries: BrowseEntry[]
+  is_under_root: boolean
 }

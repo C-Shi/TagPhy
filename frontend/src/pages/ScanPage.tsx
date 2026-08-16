@@ -21,6 +21,7 @@ export function ScanPage() {
   const [logs, setLogs] = useState<ScanLog[]>([])
   const [error, setError] = useState<string | null>(null)
   const [browseOpen, setBrowseOpen] = useState(false)
+  const [scanConfirmOpen, setScanConfirmOpen] = useState(false)
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false)
   const jobStatusRef = useRef(jobStatus)
   jobStatusRef.current = jobStatus
@@ -47,8 +48,9 @@ export function ScanPage() {
     return unsubscribe
   }, [])
 
-  async function onScan() {
+  async function onConfirmScan() {
     if (!path || isBusy(jobStatus)) return
+    setScanConfirmOpen(false)
     setError(null)
     setLogs([])
     try {
@@ -112,7 +114,7 @@ export function ScanPage() {
               <button
                 type="button"
                 disabled={!path}
-                onClick={onScan}
+                onClick={() => setScanConfirmOpen(true)}
                 className="rounded bg-accent px-3 py-1.5 text-base font-medium text-on-accent hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Scan
@@ -137,6 +139,16 @@ export function ScanPage() {
             setPath(selected)
             setBrowseOpen(false)
           }}
+        />
+      )}
+
+      {scanConfirmOpen && (
+        <ConfirmModal
+          title="Files will be moved"
+          message={`Scanning permanently moves each successful file into Photo_Tagged/<year>/ (or Photo_Tagged/Unknown/). The original is not left in place. Stopping a scan does not undo files already moved.\n\n${path}`}
+          confirmLabel="Start scan"
+          onCancel={() => setScanConfirmOpen(false)}
+          onConfirm={onConfirmScan}
         />
       )}
 

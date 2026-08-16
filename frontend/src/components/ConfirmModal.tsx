@@ -24,7 +24,9 @@ export function ConfirmModal({
         <h2 id="confirm-title" className="text-lg font-semibold text-ink">
           {title}
         </h2>
-        <p className="mt-2 text-base text-ink-muted">{message}</p>
+        <p className="mt-2 whitespace-pre-line text-base text-ink-muted">
+          {message}
+        </p>
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
