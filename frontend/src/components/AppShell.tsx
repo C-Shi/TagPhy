@@ -2,7 +2,7 @@ import { useState } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { ScanLockContext } from "./ScanLockContext"
 
-const upcoming = ["Agent", "Settings"] as const
+const upcoming = ["Agent"] as const
 
 function navClass(isActive: boolean) {
   return [
@@ -43,6 +43,12 @@ export function AppShell() {
               )}
               <NavLink to="/scan" className={({ isActive }) => navClass(isActive)}>
                 Scan
+              </NavLink>
+              <NavLink
+                to="/settings"
+                className={({ isActive }) => navClass(isActive)}
+              >
+                Settings
               </NavLink>
               {upcoming.map((label) => (
                 <span

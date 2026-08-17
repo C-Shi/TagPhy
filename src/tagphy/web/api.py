@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Body, HTTPException, status, Response, Query
 from fastapi.responses import JSONResponse
-from typing import Annotated
+from typing import Annotated, Any
 from tagphy.db import SQLiteConnection
+from tagphy.web.utils.settings import SettingsStore
 from tagphy.web.utils.tag_helper import TagHelper
 from tagphy.web.utils.picture_helper import PictureHelper
 from tagphy.web.utils.browse_helper import BrowseHelper
@@ -11,6 +12,7 @@ from tagphy.tools.pipeline import ImageProcessingPipeline
 router = APIRouter(prefix="/api")
 tag_helper = TagHelper(db=SQLiteConnection())
 picture_helper = PictureHelper(db=SQLiteConnection())
+settings_store = SettingsStore(db=SQLiteConnection())
 scan_job = ScanJobController(ImageProcessingPipeline())
 browse_helper = BrowseHelper()
 
@@ -105,3 +107,17 @@ async def scan_stop():
 @router.get("/scan/status")
 async def scan_status():
     return {"status": scan_job.job_state}
+
+
+# Settings Routes
+@router.get("/settings")
+async def get_settings():
+    return settings_store.load()
+
+
+@router.put("/settings/{config}")
+async def update_setting(config: str, payload: dict[str, Any] = Body(...)):
+    try:
+        return settings_store.set(config, payload.get("value"))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

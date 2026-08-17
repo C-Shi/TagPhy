@@ -1,4 +1,4 @@
-import type { Picture, TagResponse, TagPictureResponse } from './types'
+import type { Picture, SettingsMap, TagResponse, TagPictureResponse } from './types'
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -41,4 +41,21 @@ export async function fetchPictures(
   const res = await fetch(`/api/pictures?${search.toString()}`)
   const data = await parseJson<Picture[]>(res)
   return data || []
+}
+
+export async function fetchSettings(): Promise<SettingsMap> {
+  const res = await fetch('/api/settings')
+  return parseJson<SettingsMap>(res)
+}
+
+export async function updateSetting(
+  config: string,
+  value: string,
+): Promise<SettingsMap> {
+  const res = await fetch(`/api/settings/${encodeURIComponent(config)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  })
+  return parseJson<SettingsMap>(res)
 }

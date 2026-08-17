@@ -101,25 +101,20 @@ metadata → (if privacy_pre_check) NSFW ONNX → (if clear) OCR + DistilBERT PI
          → blocked/fail: failure_log, skip file
 ```
 
-#### 6.1 Settings file (JSON key-value)
+#### 6.1 Settings table (SQLite key-value)
 
-Durable product settings, not SQLite. File: `app_root() / "settings.json"` (same portable root as `tagphy.db`).
+Durable product settings in SQLite (same `tagphy.db` as the catalog). Table `settings`: `config` TEXT PK, `value` TEXT NOT NULL (non-empty). Loose store: extra keys allowed. Secrets stay in `.env`.
 
-- Store: JSON object `{ "<config>": "<value>", ... }`. `config` = string PK. `value` = non-empty string (booleans as `"true"` / `"false"`). Unknown keys allowed. Missing known keys filled from defaults on load, then written back.
-- Default: `privacy_pre_check` → `"true"`.
-- User overwrites from the UI; persists on the USB/app copy (not session-only). Secrets stay in `.env`, not this file.
+- Default row: `privacy_pre_check` → `"true"`.
+- User overwrites from the UI; persists on the USB/app copy (not session-only).
+- `privacy_pre_check_enabled()` is true unless value is exactly `"false"` (fail closed on garbage).
 
 Technical steps:
 
-1. Add `src/tagphy/settings.py` (or `src/tagphy/config/settings.py`):
-   - `SETTINGS_PATH = app_root() / "settings.json"`
-   - `DEFAULTS = {"privacy_pre_check": "true"}`
-   - `load()` — if missing, write defaults; if present, merge missing keys, persist, return map
-   - `get(config) -> str`; `set(config, value) -> dict` — reject empty value; atomic write (temp file then replace)
-   - `privacy_pre_check_enabled() -> bool` — true unless value is exactly `"false"` (fail closed on garbage)
-2. API in `src/tagphy/web/api.py`: `GET /api/settings` (full map); `PUT /api/settings/{config}` body `{ "value": "..." }` persist and return map. For 6.1 allow any non-empty string key (loose store).
-3. Frontend: AppShell already has a placeholder `"Settings"` nav item. Add a real `/settings` route: `GET` on mount; toggle **Privacy pre-check** bound to `privacy_pre_check`; `PUT` on change; disable while scan is locked (`ScanLockContext`).
-4. Tests: missing file seeds defaults; `set` overwrites and re-read matches; `"false"` is off, anything else is on.
+1. Migration `002_create_settings.sql`: create table + `INSERT OR IGNORE` default. Helper `src/tagphy/web/utils/settings.py` (`SettingsStore`): `load()` seeds missing DEFAULTS then returns `{config: value}`; `get` / `set` (reject empty value); `privacy_pre_check_enabled()`.
+2. API: `GET /api/settings` (full map); `PUT /api/settings/{config}` body `{ "value": "..." }` persist and return map. Any non-empty string key allowed.
+3. Frontend: real `/settings` route (AppShell Settings nav). Toggle **Privacy pre-check** bound to `privacy_pre_check`; `PUT` on change; disable while scan is locked (`ScanLockContext`).
+4. Tests: migrate seeds default; `set` overwrites and re-read matches; missing default key is filled on `load`; `"false"` is off, anything else is on.
 
 #### 6.2 Local ONNX NSFW / intimate pre-check
 

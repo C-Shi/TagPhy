@@ -85,3 +85,6 @@ export type BrowseResponse = {
   entries: BrowseEntry[]
   is_under_root: boolean
 }
+
+/** GET /api/settings — config → value strings. */
+export type SettingsMap = Record<string, string>

@@ -1,7 +1,7 @@
 # TagPhy Catalog Schema
 
-Source of truth: [`migrations/001_create_table.sql`](migrations/001_create_table.sql).
-This document describes the schema as defined by that migration only.
+Source of truth: SQL files in [`migrations/`](migrations/).
+This document describes the schema as defined by those migrations.
 
 ## ERD
 
@@ -59,6 +59,11 @@ erDiagram
     schema_migrations {
         TEXT version PK
         TEXT applied_at
+    }
+
+    settings {
+        TEXT config PK
+        TEXT value
     }
 ```
 
@@ -132,6 +137,17 @@ One row per source path that failed processing (upsert target).
 | `first_seen_at` | TEXT | NOT NULL | First failure time |
 | `last_seen_at` | TEXT | NOT NULL | Most recent failure time |
 | `resolved_at` | TEXT | nullable | Set when resolved, if retained |
+
+### `settings`
+
+Key-value product settings (migration `002_create_settings.sql`). Not for secrets.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `config` | TEXT | PRIMARY KEY | Setting name (e.g. `privacy_pre_check`) |
+| `value` | TEXT | NOT NULL, `CHECK (value <> '')` | Stored as a string (`"true"` / `"false"` for booleans) |
+
+Default row: `privacy_pre_check` = `'true'` (`INSERT OR IGNORE` in the migration; `SettingsStore.load()` also seeds missing defaults).
 
 ### `schema_migrations`
 

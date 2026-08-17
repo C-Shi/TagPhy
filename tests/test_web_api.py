@@ -69,3 +69,31 @@ class TestTagPicturesRoute:
         mock_helper.get_tag_pictures.assert_called_once_with(999)
         assert exc_info.value.status_code == 400
         assert exc_info.value.detail == "Bad Request: Invalid Tag"
+
+
+class TestSettingsRoute:
+    def test_get_settings_returns_store_map(self):
+        mock_store = MagicMock()
+        mock_store.load.return_value = {"privacy_pre_check": "true"}
+        with patch.object(api, "settings_store", mock_store):
+            result = _run(api.get_settings())
+        mock_store.load.assert_called_once_with()
+        assert result == {"privacy_pre_check": "true"}
+
+    def test_put_setting_calls_set(self):
+        mock_store = MagicMock()
+        mock_store.set.return_value = {"privacy_pre_check": "false"}
+        with patch.object(api, "settings_store", mock_store):
+            result = _run(
+                api.update_setting("privacy_pre_check", {"value": "false"})
+            )
+        mock_store.set.assert_called_once_with("privacy_pre_check", "false")
+        assert result["privacy_pre_check"] == "false"
+
+    def test_put_empty_value_raises_http_400(self):
+        mock_store = MagicMock()
+        mock_store.set.side_effect = ValueError("value must be a non-empty string")
+        with patch.object(api, "settings_store", mock_store):
+            with pytest.raises(HTTPException) as exc_info:
+                _run(api.update_setting("privacy_pre_check", {"value": ""}))
+        assert exc_info.value.status_code == 400
