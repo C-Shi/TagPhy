@@ -5,7 +5,7 @@ alwaysApply: false
 
 ## Guiding principle
 
-- The scan pipeline (metadata, vision, storage, orchestration) is **plain Python functions**. Vision is a **direct model call** behind a swappable `ImageVision` interface — online Gemini (`google-genai`) and/or local Qwen2.5-VL-3B — not an LlmAgent.
+- The scan pipeline (metadata, vision, storage, orchestration) is **plain Python functions**. Vision tagging is a **direct Gemini API call** (`google-genai`) behind `ImageVision`, not an LlmAgent. Optional local ONNX models are a **privacy pre-check** (NSFW / PII) before Gemini — not a tagging engine and not a local VLM.
 - ADK is used **only where an agent is genuinely needed**: judgment, tool selection, iteration, or natural-language interaction. That lives in Stage Seven (Catalog Assistant), which is also where the ADK learning goal is fulfilled.
 - Rule of thumb: **Need a model? Call a model. Need an agent? Only if something must decide what to do next.**
 
@@ -87,17 +87,98 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 4. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options). (Detail page shell exists; real gallery still thin — separate from 5.3 Library preview.)
 5. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
 
-### Stage Six: Local Vision Engine (Qwen2.5-VL-3B)
+### Stage Six: Privacy Gate (settings + ONNX pre-check)
 
-Local / offline vision via a promptable VLM. Replaces the earlier “local ONNX dual inference” idea. Product default (Gemini vs local) is **not** locked here — only the swap point, model, and packaging path. Tasks below are in **development sequence** (runtime first, then engine, then contract tuning, then wiring, then packaging).
+Retires bundled local VLM as the near-term path. Vision tagging stays Gemini. When the gate is on, keep intimate/NSFW **and likely-PII** bytes off the cloud (best-effort, not a legal/PII guarantee). Not an ADK agent. Stage Five GUI can land first. Development order: 6.1 settings → 6.2 NSFW → 6.3 PII.
 
-1. Development runtime: stand up a local VLM server (e.g. Ollama or llama.cpp server) and pull **Qwen2.5-VL-3B** (quantized for practical disk/RAM). Server may be **started manually** in development. Smoke-test image→text on localhost before wiring TagPhy. Developers accept multi-process startup (FE / BE / LLM).
-2. `LocalImageVision` engine: keep the scan pipeline as plain functions; vision stays behind the existing `ImageVision` ABC (`src/tagphy/tools/image_vision.py`). Add `LocalImageVision` that calls the local server and implements the same `tag_image(path) -> {tags, tag_relations}` contract as `GeminiVisionEngine`.
-3. Prompt + JSON contract: reuse the same tagging / system-prompt intent as Gemini where feasible; validate structured JSON in Python (retry / cleanup as needed — local models are less schema-reliable than Gemini). Tune against real Qwen output from 6.1.
-4. Config / factory swap: select Gemini vs `LocalImageVision` through config/factory only — do not prescribe which engine is the product default.
-5. Product packaging target: the final desktop app uses a **single entry point** that starts UI + backend + local VLM runtime in sequence so end users never start a separate LLM process. Model weights are part of the on-device story (bundled with the app or an app-managed install path — packaging detail in Stage Eight desktop wrap).
+**Cheaper than a local VLM:** NSFW ONNX + RapidOCR + DistilBERT-PII INT8 is typically **0.2–0.5 GB disk**, under **~1.5 GB RAM**, **tens of ms to ~1–2 s per photo**, in-process (no extra server; fine on macOS 13). A 3B VLM is multi-GB, ~4–6 GB+ RAM, and seconds to tens of seconds per image. The gate only decides skip-vs-Gemini; it does not replace tagging.
 
-Boundaries: scan remains deterministic functions (not an ADK agent). Catalog Assistant is Stage Seven. This stage does not replace Stage Five GUI work; it can proceed once the `ImageVision` swap point is stable (already exists).
+**Fail closed:** NSFW or PII flagged, unsure, missing weights, or crash → do **not** tag, do **not** call Gemini, do **not** move. Leave the file in place. Log via existing `_failure` → `failure_log` (`stage` = `nsfw_pre_check` or `pii_pre_check`). Scan counts it as a per-image failure; the batch continues. `privacy_pre_check` = `"false"` skips both screens.
+
+```text
+metadata → (if privacy_pre_check) NSFW ONNX → (if clear) OCR + DistilBERT PII
+         → clear: Gemini tag_image → store
+         → blocked/fail: failure_log, skip file
+```
+
+#### 6.1 Settings file (JSON key-value)
+
+Durable product settings, not SQLite. File: `app_root() / "settings.json"` (same portable root as `tagphy.db`).
+
+- Store: JSON object `{ "<config>": "<value>", ... }`. `config` = string PK. `value` = non-empty string (booleans as `"true"` / `"false"`). Unknown keys allowed. Missing known keys filled from defaults on load, then written back.
+- Default: `privacy_pre_check` → `"true"`.
+- User overwrites from the UI; persists on the USB/app copy (not session-only). Secrets stay in `.env`, not this file.
+
+Technical steps:
+
+1. Add `src/tagphy/settings.py` (or `src/tagphy/config/settings.py`):
+   - `SETTINGS_PATH = app_root() / "settings.json"`
+   - `DEFAULTS = {"privacy_pre_check": "true"}`
+   - `load()` — if missing, write defaults; if present, merge missing keys, persist, return map
+   - `get(config) -> str`; `set(config, value) -> dict` — reject empty value; atomic write (temp file then replace)
+   - `privacy_pre_check_enabled() -> bool` — true unless value is exactly `"false"` (fail closed on garbage)
+2. API in `src/tagphy/web/api.py`: `GET /api/settings` (full map); `PUT /api/settings/{config}` body `{ "value": "..." }` persist and return map. For 6.1 allow any non-empty string key (loose store).
+3. Frontend: AppShell already has a placeholder `"Settings"` nav item. Add a real `/settings` route: `GET` on mount; toggle **Privacy pre-check** bound to `privacy_pre_check`; `PUT` on change; disable while scan is locked (`ScanLockContext`).
+4. Tests: missing file seeds defaults; `set` overwrites and re-read matches; `"false"` is off, anything else is on.
+
+#### 6.2 Local ONNX NSFW / intimate pre-check
+
+In-process CPU classifier. Not a tagging engine. Not a local LLM.
+
+Technical steps:
+
+1. Dependency: `onnxruntime` (CPU). Model under `app_root() / "models" /` (e.g. `nsfw.onnx`). Pick a small open NSFW/nudity ONNX at implementation; path as a constant. Git LFS / release asset later.
+2. Add `NsfwPreCheck` (plain class, not `ImageVision`) in `src/tagphy/tools/nsfw_precheck.py`:
+   - Load ONNX session once (lazy); keep on the pipeline instance
+   - Decode like vision (Pillow + HEIF); downscale to classifier size (e.g. 224², not the 1024 Gemini thumbnail)
+   - Verdict `clear` vs `blocked`. **Fail closed:** missing file, ONNX error, unreadable image, or score at/above threshold → `blocked` (prefer catching intimate frames)
+3. Wire into `ImageProcessingPipeline._run_single` after `extract_metadata`, before `tag_image`:
+   - Gate off → Gemini as today
+   - On + `clear` → continue (6.3 PII, then Gemini + store)
+   - On + `blocked` or exception → stop this file; `_failure(image_path, "nsfw_pre_check", error)`; no Gemini, no tags, no move. Batch continues. Do not run PII if NSFW blocked
+4. Custom exception e.g. `NsfwScreenError` for `failure_log.error_type`.
+5. Tests (mock ONNX, no real weights in CI): setting off → `tag_image` called; on + clear → continues; on + blocked/raised → no `tag_image` / `store_image`, `failure_log` stage `nsfw_pre_check`.
+6. Scan UI: existing failure coloring is enough; message should say NSFW pre-check skipped the file.
+
+Honesty: best-effort for typical intimate/NSFW frames. PII is 6.3.
+
+#### 6.3 PII pre-check (second ONNX)
+
+Same `privacy_pre_check` toggle. Same skip-file + `failure_log` behavior. DistilBERT PII NER takes **text**, not pixels — do not run it on the JPEG.
+
+```text
+thumbnail → lightweight OCR → text
+  → regex (SSN, card/Luhn, email, phone, MRZ)
+  → quantized DistilBERT-PII NER ONNX
+  → blocked if either hits
+```
+
+Model choice:
+
+- **PII specialist:** quantized DistilBERT PII token-classifier (INT8 ONNX, ~70–140 MB). Swap-file alternative later: MiniLM-L6 PII NER.
+- **OCR adapter:** RapidOCR / PP-OCRv4-mobile ONNX (tens of MB). Required to get text from the image.
+- **Regex:** structured IDs NER often misses; fail closed.
+
+Do not treat a generic “document photo” image classifier as enough PII detection.
+
+Technical steps:
+
+1. Add `PiiPreCheck` in `src/tagphy/tools/pii_precheck.py`:
+   - Lazy-load RapidOCR + DistilBERT-PII ONNX once (CPU `onnxruntime`, same runtime as 6.2)
+   - Weights under `app_root() / "models" /` (e.g. `ocr.onnx`, `pii_distilbert.onnx`, tokenizer files)
+   - Reuse decode/HEIF; OCR at modest resolution. Empty OCR text → `clear` (NSFW already ran)
+   - Regex match → `blocked` (`PiiScreenError`, `structured_pii`); else NER above threshold → `blocked` (`ner_pii`)
+   - **Fail closed:** missing weights, ONNX/OCR/tokenizer crash → `blocked`
+2. Wire in `_run_single` after NSFW `clear`, before `tag_image`:
+   - Gate off → neither 6.2 nor 6.3
+   - NSFW blocked → skip PII; already logged `nsfw_pre_check`
+   - PII blocked/fail → `_failure(..., "pii_pre_check", PiiScreenError)` — no Gemini, no move, no tags
+   - both clear → Gemini then store
+3. Threshold: high recall / fail closed. NER on names will false-positive some travel photos; accept that or turn the toggle off.
+4. Tests (mock OCR + NER, no real weights in CI): empty OCR → Gemini; regex hit / NER hit / missing model → `pii_pre_check` and no Gemini; NSFW blocked → PII not called.
+5. Scan log: distinguish NSFW skip vs PII skip.
+
+Honesty: better for text-in-image PII (IDs, forms, screenshots) than a document-image classifier; misses blurry/handwritten docs and non-text PII (a face is not “PII detected” here). Not a compliance guarantee.
 
 ### Stage Seven: Catalog Assistant Agent (ADK — the real agent use case)
 
@@ -107,21 +188,21 @@ Boundaries: scan remains deterministic functions (not an ADK agent). Catalog Ass
    - Merge / rename tags.
    - Re-run vision on selected photos.
    - Review the failure log and decide retry / skip / ask.
-2. This is where ADK concepts (FunctionTool, session state, Runner, `adk web`) are exercised for real. The `agents/` package is reintroduced here as needed. Prefer the same local (or configured) model runtime as Stage Six when the assistant needs a model — still an agent use case, not inlined into the scan loop.
+2. This is where ADK concepts (FunctionTool, session state, Runner, `adk web`) are exercised for real. The `agents/` package is reintroduced here as needed. Still an agent use case, not inlined into the scan loop.
 
 ### Stage Eight: Complicated Scenarios
 
 1. Pipeline processing error handling (Detail TBD).
 2. Naming conflicts on move / duplicate filenames (Detail TBD).
-3. Wrap into a desktop app (start with Mac; Windows optional). Single entry point should be able to start UI, backend, and (when enabled) the local VLM runtime from Stage Six.
+3. Wrap into a desktop app (start with Mac; Windows optional). Single entry point starts UI + backend (no local VLM sidecar).
 
 ### Stage Nine: Additional Features TBD
 
-Local / offline vision is covered in Stage Six (Qwen2.5-VL-3B); the old ONNX dual-inference TBD is retired.
+Local VLM tagging is deferred. Privacy ONNX pre-check is Stage Six.
 
 1. Few-shot entity recognition (embeddings, cosine similarity) (Detail TBD).
 2. Vision function update: set an upper limit on how many tags a picture can receive.
 
 ## Status
 
-Stage four complete. Stage five: 5.2 tags browse done; 5.3 Library + preview mostly done (see 5.3 follow-ups). 5.1 scan UI, 5.4–5.5 not started. Stage Six (local Qwen vision) planned, not started.
+Stage four complete. Stage five: 5.2 tags browse done; 5.3 Library + preview mostly done (see 5.3 follow-ups). 5.1 scan UI, 5.4–5.5 not started. Stage Six (privacy gate: settings + NSFW/PII ONNX) planned, not started.
