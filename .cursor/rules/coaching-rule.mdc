@@ -46,7 +46,7 @@ Developer are allowed to work with AI Agent to figure out those, as long as they
 
 # Response Structure for Every Chat
 
-After the agent completes the implementation for a prompt, provide a short, constructive evaluation block using the following format:
+After user explicitly called for evaluation, provide a short, constructive evaluation block using the following format:
 
 ### 📊 Level Assessment Check-in
 

@@ -5,8 +5,8 @@ alwaysApply: false
 
 ## Guiding principle
 
-- The scan pipeline (metadata, vision, storage, orchestration) is **plain Python functions**. Vision uses a **direct Gemini API call** (`google-genai`), not an LlmAgent.
-- ADK is used **only where an agent is genuinely needed**: judgment, tool selection, iteration, or natural-language interaction. That lives in Stage Six (Catalog Assistant), which is also where the ADK learning goal is fulfilled.
+- The scan pipeline (metadata, vision, storage, orchestration) is **plain Python functions**. Vision is a **direct model call** behind a swappable `ImageVision` interface — online Gemini (`google-genai`) and/or local Qwen2.5-VL-3B — not an LlmAgent.
+- ADK is used **only where an agent is genuinely needed**: judgment, tool selection, iteration, or natural-language interaction. That lives in Stage Seven (Catalog Assistant), which is also where the ADK learning goal is fulfilled.
 - Rule of thumb: **Need a model? Call a model. Need an agent? Only if something must decide what to do next.**
 
 ## Tasks
@@ -38,7 +38,7 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
    1d. After each chunk, repeat 1b–1c until no images remain in the target directory.
    1e. Path must not be `Photo_Tagged/` (that folder is the output of processing).
 
-2. (Optional) Multi-thread or multi-process so multiple chunks can run in parallel. **Deferred** — revisit after Stage Four (DB writes) and Stage Seven task 2 (naming conflicts). Concurrency before durable persistence and atomic collision handling adds race conditions on move + DB write, risks Gemini rate limits, and the shared vision client is not verified thread-safe. Revisit only when measured Gemini latency makes large scans impractical; then use a small bounded thread pool with rate limiting and a single serialized DB writer.
+2. (Optional) Multi-thread or multi-process so multiple chunks can run in parallel. **Deferred** — revisit after Stage Four (DB writes) and Stage Eight task 2 (naming conflicts). Concurrency before durable persistence and atomic collision handling adds race conditions on move + DB write, risks Gemini rate limits, and the shared vision client is not verified thread-safe. Revisit only when measured Gemini latency makes large scans impractical; then use a small bounded thread pool with rate limiting and a single serialized DB writer.
 
 ### Stage Four: Database Integration
 
@@ -87,7 +87,19 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
 4. `/tags/:tag_id/pictures`: tag description, picture count, and a scrolling preview of all direct or indirect photos tagged (with view options). (Detail page shell exists; real gallery still thin — separate from 5.3 Library preview.)
 5. `/pictures/:picture_id`: detail page with preview, metadata, tags, description; allow manual tag overwrite/edit.
 
-### Stage Six: Catalog Assistant Agent (ADK — the real agent use case)
+### Stage Six: Local Vision Engine (Qwen2.5-VL-3B)
+
+Local / offline vision via a promptable VLM. Replaces the earlier “local ONNX dual inference” idea. Product default (Gemini vs local) is **not** locked here — only the swap point, model, and packaging path. Tasks below are in **development sequence** (runtime first, then engine, then contract tuning, then wiring, then packaging).
+
+1. Development runtime: stand up a local VLM server (e.g. Ollama or llama.cpp server) and pull **Qwen2.5-VL-3B** (quantized for practical disk/RAM). Server may be **started manually** in development. Smoke-test image→text on localhost before wiring TagPhy. Developers accept multi-process startup (FE / BE / LLM).
+2. `LocalImageVision` engine: keep the scan pipeline as plain functions; vision stays behind the existing `ImageVision` ABC (`src/tagphy/tools/image_vision.py`). Add `LocalImageVision` that calls the local server and implements the same `tag_image(path) -> {tags, tag_relations}` contract as `GeminiVisionEngine`.
+3. Prompt + JSON contract: reuse the same tagging / system-prompt intent as Gemini where feasible; validate structured JSON in Python (retry / cleanup as needed — local models are less schema-reliable than Gemini). Tune against real Qwen output from 6.1.
+4. Config / factory swap: select Gemini vs `LocalImageVision` through config/factory only — do not prescribe which engine is the product default.
+5. Product packaging target: the final desktop app uses a **single entry point** that starts UI + backend + local VLM runtime in sequence so end users never start a separate LLM process. Model weights are part of the on-device story (bundled with the app or an app-managed install path — packaging detail in Stage Eight desktop wrap).
+
+Boundaries: scan remains deterministic functions (not an ADK agent). Catalog Assistant is Stage Seven. This stage does not replace Stage Five GUI work; it can proceed once the `ImageVision` swap point is stable (already exists).
+
+### Stage Seven: Catalog Assistant Agent (ADK — the real agent use case)
 
 1. Build an ADK LlmAgent with tools over the existing pipeline functions and DB:
    - Search photos by natural language.
@@ -95,20 +107,21 @@ At this stage: Gemini for vision tagging only (direct API). Metadata and storage
    - Merge / rename tags.
    - Re-run vision on selected photos.
    - Review the failure log and decide retry / skip / ask.
-2. This is where ADK concepts (FunctionTool, session state, Runner, `adk web`) are exercised for real. The `agents/` package is reintroduced here as needed.
+2. This is where ADK concepts (FunctionTool, session state, Runner, `adk web`) are exercised for real. The `agents/` package is reintroduced here as needed. Prefer the same local (or configured) model runtime as Stage Six when the assistant needs a model — still an agent use case, not inlined into the scan loop.
 
-### Stage Seven: Complicated Scenarios
+### Stage Eight: Complicated Scenarios
 
 1. Pipeline processing error handling (Detail TBD).
 2. Naming conflicts on move / duplicate filenames (Detail TBD).
-3. Wrap into a desktop app (start with Mac; Windows optional).
+3. Wrap into a desktop app (start with Mac; Windows optional). Single entry point should be able to start UI, backend, and (when enabled) the local VLM runtime from Stage Six.
 
-### Stage Eight: Additional Features TBD
+### Stage Nine: Additional Features TBD
 
-1. Dual inference: local ONNX model when offline or when remote API should not be used (Detail TBD).
-2. Few-shot entity recognition (embeddings, cosine similarity) (Detail TBD).
-3. Vision function update: set an upper limit on how many tags a picture can receive.
+Local / offline vision is covered in Stage Six (Qwen2.5-VL-3B); the old ONNX dual-inference TBD is retired.
+
+1. Few-shot entity recognition (embeddings, cosine similarity) (Detail TBD).
+2. Vision function update: set an upper limit on how many tags a picture can receive.
 
 ## Status
 
-Stage four complete. Stage five: 5.2 tags browse done; 5.3 Library + preview mostly done (see 5.3 follow-ups). 5.1 scan UI, 5.4–5.6 not started.
+Stage four complete. Stage five: 5.2 tags browse done; 5.3 Library + preview mostly done (see 5.3 follow-ups). 5.1 scan UI, 5.4–5.5 not started. Stage Six (local Qwen vision) planned, not started.
