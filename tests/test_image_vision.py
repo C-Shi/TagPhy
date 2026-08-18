@@ -39,7 +39,7 @@ class TestGeminiVisionEngine:
 
     def test_returns_parsed_tags_and_relations(self):
         engine = self._engine_with_fake_client()
-        engine._get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
+        engine.get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
         parsed = _vision_result(
             "cat",
             "balcony",
@@ -57,7 +57,7 @@ class TestGeminiVisionEngine:
 
     def test_requests_structured_json_schema_image_and_catalog_text(self):
         engine = self._engine_with_fake_client(existing_tags=["animal", "cat"])
-        engine._get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
+        engine.get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
         response = MagicMock()
         response.parsed = _vision_result("cat")
         engine.client.models.generate_content.return_value = response
@@ -86,7 +86,7 @@ class TestGeminiVisionEngine:
 
     def test_api_failure_propagates(self):
         engine = self._engine_with_fake_client()
-        engine._get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
+        engine.get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
         engine.client.models.generate_content.side_effect = RuntimeError(
             "api down"
         )
@@ -96,7 +96,7 @@ class TestGeminiVisionEngine:
 
     def test_thumbnail_failure_propagates(self):
         engine = self._engine_with_fake_client()
-        engine._get_image_thumbnail = MagicMock(
+        engine.get_image_thumbnail = MagicMock(
             side_effect=OSError("cannot open")
         )
 

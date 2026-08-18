@@ -84,7 +84,7 @@ class ImageVision(ABC):
             Why: returned "man" relates to existing "human" (parent) and "father" (child).
         """
 
-    def _get_image_thumbnail(self, image_path: str) -> bytes:
+    def get_image_thumbnail(self, image_path: str) -> bytes:
         with Image.open(image_path) as img:
             rgb = img.convert("RGB")
             rgb.thumbnail((1024, 1024))
@@ -112,7 +112,7 @@ class GeminiVisionEngine(ImageVision):
         super().__init__()
 
     def tag_image(self, image_path: str) -> Dict[str, Any]:
-        image_buff = self._get_image_thumbnail(image_path)
+        image_buff = self.get_image_thumbnail(image_path)
 
         existing_tags = self.db.select(
             table="tags",
