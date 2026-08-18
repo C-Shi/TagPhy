@@ -2,6 +2,8 @@ from .image_metadata import ImageMetadata
 from .image_storage import ImageStorage
 from .image_vision import ImageVision, GeminiVisionEngine
 from .nsfw_precheck import NSFWPreCheck, NSFWScreenError
+from .pipeline import ImageProcessingPipeline
+from .scan_job import ScanJobController, BusyError
 
 __all__ = [
     "ImageMetadata",
@@ -10,4 +12,7 @@ __all__ = [
     "GeminiVisionEngine",
     "NSFWPreCheck",
     "NSFWScreenError",
+    "ImageProcessingPipeline",
+    "ScanJobController",
+    "BusyError",
 ]

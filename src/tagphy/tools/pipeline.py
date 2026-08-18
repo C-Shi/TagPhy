@@ -5,7 +5,7 @@ from typing import Callable
 
 from PIL import Image
 from tagphy import app_root
-from tagphy.tools import GeminiVisionEngine, ImageMetadata, ImageStorage
+from tagphy.tools import GeminiVisionEngine, ImageMetadata, ImageStorage, NSFWPreCheck
 from tagphy.db.connection import SQLiteConnection
 
 logger = getLogger(__name__)
@@ -41,6 +41,7 @@ class ImageProcessingPipeline:
         self.workdir = Path(workdir or (app_root() / DEFAULT_OUTPUT_DIR_NAME)).resolve()
         self.image_metadata = ImageMetadata()
         self.image_vision = GeminiVisionEngine(db=self.db)
+        self.nsfw_precheck = NSFWPreCheck()
         self.image_storage = ImageStorage(workdir=str(self.workdir), db=self.db)
 
     def validate_path(self, path: str | Path) -> bool:
@@ -60,6 +61,7 @@ class ImageProcessingPipeline:
     def run(
         self,
         path: str | Path,
+        precheck: bool = True,
         should_stop: Callable = lambda: False,
         on_progress: Callable | None = None,
     ):
@@ -88,15 +90,16 @@ class ImageProcessingPipeline:
             }
 
         if target.is_dir():
-            return self._run_directory(target, should_stop, on_progress)
+            return self._run_directory(target, precheck, should_stop, on_progress)
 
         # choose not to have on_progress for single image processing. If directly, handle inside _run_directory but outside of _run_single
-        return self._run_single(str(path), should_stop)
+        return self._run_single(str(path), precheck, should_stop)
 
     def _run_single(
         self,
         image_path: str,
-        should_stop: Callable,
+        precheck: bool = True,
+        should_stop: Callable = lambda: False,
         on_progress: Callable | None = None,
     ):
         """Run the image processing pipeline on single image.
@@ -117,6 +120,21 @@ class ImageProcessingPipeline:
                 }
             )
 
+        if precheck:
+            result = self.nsfw_precheck.screen(image_path)
+            if result == "blocked":
+                if on_progress:
+                    on_progress(
+                        {
+                            "status": "skip",
+                            "stage": "run",
+                            "msg": f"Skip due to Privacy Precheck: {image_path}",
+                        }
+                    )
+                return self._failure(
+                    image_path, "nsfw_precheck", Exception("Privacy Precheck")
+                )
+
         try:
             metadata = self.image_metadata.extract_metadata(image_path)
         except Exception as e:
@@ -133,7 +151,8 @@ class ImageProcessingPipeline:
     def _run_directory(
         self,
         directory_path: str | Path,
-        should_stop: Callable,
+        precheck: bool = True,
+        should_stop: Callable = lambda: False,
         on_progress: Callable | None = None,
     ):
         """Walk a directory once, process each image, return aggregate counts."""
@@ -200,7 +219,9 @@ class ImageProcessingPipeline:
                     image_path.name,
                 )
                 try:
-                    result = self._run_single(str(image_path), should_stop, on_progress)
+                    result = self._run_single(
+                        str(image_path), precheck, should_stop, on_progress
+                    )
                 except Exception as e:
                     logger.error(
                         "Image Processing Pipeline unexpected error "

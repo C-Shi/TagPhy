@@ -49,7 +49,7 @@ class ScanJobController(metaclass=SingletonMeta):
     def job_state(self) -> JobState:
         return self.state
 
-    def start(self, path: str) -> None:
+    def start(self, path: str, config: dict = {}) -> None:
         """Claim job under Lock. Validate path. Clear ring buffer. Spawn worker.
         Raises BusyError if not idle → route maps to 409.
         Raises ValueError if path invalid / outside app_root / is Photo_Tagged.
@@ -62,6 +62,7 @@ class ScanJobController(metaclass=SingletonMeta):
                     self.log_queue.get_nowait()
                 self.pipeline.run(
                     path=path,
+                    precheck=config.get("privacy_pre_check") is True,
                     should_stop=self.stop_event.is_set,
                     on_progress=self._enqueue,
                 )
