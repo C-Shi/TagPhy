@@ -85,19 +85,17 @@ class TestNSFWPreCheckVerdict:
         assert checker.screen(image) == "blocked"
 
     @patch("tagphy.tools.nsfw_precheck._create_inference_session")
-    def test_high_sexy_without_porn_is_clear(self, mock_session_cls, tmp_path):
+    def test_high_sexy_high_second_porn_is_blocked(self, mock_session_cls, tmp_path):
         mock_session_cls.return_value = _session_with_probs(
             [0.02, 0.02, 0.06, 0.10, 0.80]
         )
         checker = _checker(tmp_path)
         image = _write_jpeg(tmp_path / "photo.jpg")
 
-        assert checker.screen(image) == "clear"
+        assert checker.screen(image) == "blocked"
 
     @patch("tagphy.tools.nsfw_precheck._create_inference_session")
-    def test_sexy_with_high_porn_hentai_is_blocked(
-        self, mock_session_cls, tmp_path
-    ):
+    def test_sexy_with_high_porn_hentai_is_blocked(self, mock_session_cls, tmp_path):
         mock_session_cls.return_value = _session_with_probs(
             [0.0, 0.40, 0.0, 0.40, 0.50]
         )

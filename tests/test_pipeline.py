@@ -16,6 +16,7 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
         patch("tagphy.tools.pipeline.GeminiVisionEngine") as Vision,
         patch("tagphy.tools.pipeline.ImageStorage") as Storage,
         patch("tagphy.tools.pipeline.SQLiteConnection", return_value=db),
+        patch("tagphy.tools.pipeline.NSFWPreCheck", return_value="clear") as NSFW,
     ):
         meta = MagicMock()
         vision = MagicMock()
@@ -27,6 +28,7 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     pipeline.image_metadata = meta
     pipeline.image_vision = vision
     pipeline.image_storage = storage
+    pipeline.nsfw_precheck = NSFW
     pipeline.db = db
     return pipeline, meta, vision, storage
 

@@ -62,12 +62,19 @@ class ScanJobController(metaclass=SingletonMeta):
                     self.log_queue.get_nowait()
                 self.pipeline.run(
                     path=path,
-                    precheck=config.get("privacy_pre_check") is True,
+                    precheck=config.get("privacy_pre_check", True),
                     should_stop=self.stop_event.is_set,
                     on_progress=self._enqueue,
                 )
             finally:
                 with self._lock:
+                    self._enqueue(
+                        {
+                            "status": "complete",
+                            "stage": "final",
+                            "msg": f"Job Finished. This does not indicate success or failure.",
+                        }
+                    )
                     self.state = "idle"
 
         with self._lock:

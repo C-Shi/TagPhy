@@ -5,7 +5,13 @@ from typing import Callable
 
 from PIL import Image
 from tagphy import app_root
-from tagphy.tools import GeminiVisionEngine, ImageMetadata, ImageStorage, NSFWPreCheck
+from tagphy.tools import (
+    GeminiVisionEngine,
+    ImageMetadata,
+    ImageStorage,
+    NSFWPreCheck,
+    NSFWScreenError,
+)
 from tagphy.db.connection import SQLiteConnection
 
 logger = getLogger(__name__)
@@ -92,8 +98,7 @@ class ImageProcessingPipeline:
         if target.is_dir():
             return self._run_directory(target, precheck, should_stop, on_progress)
 
-        # choose not to have on_progress for single image processing. If directly, handle inside _run_directory but outside of _run_single
-        return self._run_single(str(path), precheck, should_stop)
+        return self._run_single(str(path), precheck, should_stop, on_progress)
 
     def _run_single(
         self,
@@ -126,13 +131,13 @@ class ImageProcessingPipeline:
                 if on_progress:
                     on_progress(
                         {
-                            "status": "skip",
+                            "status": "fail",
                             "stage": "run",
-                            "msg": f"Skip due to Privacy Precheck: {image_path}",
+                            "msg": f"Fail due to Privacy Precheck: {image_path}",
                         }
                     )
                 return self._failure(
-                    image_path, "nsfw_precheck", Exception("Privacy Precheck")
+                    image_path, "nsfw_precheck", NSFWScreenError("Privacy Precheck")
                 )
 
         try:

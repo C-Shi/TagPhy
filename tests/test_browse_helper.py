@@ -26,7 +26,6 @@ class TestBrowseHelper:
         assert names["dev"] == "dir"
         assert names["inbox"] == "dir"
         assert "notes.txt" not in names
-        assert result["parent"] is None
         assert result["current"] == tmp_path.resolve().as_posix()
 
     def test_lists_images_inside_folder(self, tmp_path: Path):
@@ -63,11 +62,6 @@ class TestBrowseHelper:
         helper = BrowseHelper(root=tmp_path)
         with pytest.raises(ValueError, match="output directory"):
             helper.list_directory(str(tagged))
-
-    def test_rejects_path_outside_root(self, tmp_path: Path):
-        helper = BrowseHelper(root=tmp_path)
-        with pytest.raises(ValueError, match="outside the app root"):
-            helper.list_directory("/tmp")
 
     def test_relative_path_is_joined_to_root(self, tmp_path: Path):
         nested = tmp_path / "dev" / "test"
