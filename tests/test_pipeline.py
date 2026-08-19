@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from tagphy.tools.nsfw_precheck import NSFWScreenError
 from tagphy.tools.pipeline import BATCH_SIZE, PROGRESS_INTERVAL, ImageProcessingPipeline
 
 APP_ROOT = Path("/virtual")
@@ -11,12 +12,14 @@ APP_ROOT = Path("/virtual")
 def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     """Build a pipeline without real Gemini client or SQLiteConnection."""
     db = MagicMock()
+    nsfw = MagicMock()
+    nsfw.screen.return_value = "clear"
     with (
         patch("tagphy.tools.pipeline.ImageMetadata") as Meta,
         patch("tagphy.tools.pipeline.GeminiVisionEngine") as Vision,
         patch("tagphy.tools.pipeline.ImageStorage") as Storage,
         patch("tagphy.tools.pipeline.SQLiteConnection", return_value=db),
-        patch("tagphy.tools.pipeline.NSFWPreCheck", return_value="clear") as NSFW,
+        patch("tagphy.tools.pipeline.NSFWPreCheck", return_value=nsfw),
     ):
         meta = MagicMock()
         vision = MagicMock()
@@ -28,7 +31,7 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     pipeline.image_metadata = meta
     pipeline.image_vision = vision
     pipeline.image_storage = storage
-    pipeline.nsfw_precheck = NSFW
+    pipeline.nsfw_precheck = nsfw
     pipeline.db = db
     return pipeline, meta, vision, storage
 
@@ -120,6 +123,75 @@ class TestPipelineHardStop:
         assert result["status"] == "fail"
         assert result["stage"] == "store_image"
         assert result["image"] == "photo.jpg"
+
+
+class TestNsfwPrecheckGate:
+    """6.2: toggle off skips screen; clear continues; blocked/error skip Gemini and move."""
+
+    def _happy_path_stubs(self, meta, vision, storage):
+        meta.extract_metadata.return_value = {"year": "2024", "location": None}
+        vision.tag_image.return_value = {
+            "tags": ["cat", "balcony"],
+            "tag_relations": [],
+        }
+        storage.store_image.return_value = {"destination_path": "ok"}
+
+    def test_precheck_off_skips_screen_and_calls_tag_image(self):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/virtual/inbox/photo.jpg"
+        self._happy_path_stubs(meta, vision, storage)
+
+        pipeline.run(path, precheck=False)
+
+        pipeline.nsfw_precheck.screen.assert_not_called()
+        vision.tag_image.assert_called_once_with(path)
+        storage.store_image.assert_called_once()
+
+    def test_precheck_on_clear_continues_to_vision_and_storage(self):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/virtual/inbox/photo.jpg"
+        self._happy_path_stubs(meta, vision, storage)
+
+        pipeline.run(path, precheck=True)
+
+        pipeline.nsfw_precheck.screen.assert_called_once_with(path)
+        vision.tag_image.assert_called_once_with(path)
+        storage.store_image.assert_called_once()
+
+    @patch("tagphy.tools.pipeline.app_root", return_value=APP_ROOT)
+    def test_precheck_on_blocked_skips_vision_and_storage(self, _app_root):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/virtual/inbox/photo.jpg"
+        pipeline.nsfw_precheck.screen.return_value = "blocked"
+
+        result = pipeline.run(path, precheck=True)
+
+        assert result["status"] == "fail"
+        assert result["stage"] == "nsfw_precheck"
+        pipeline.nsfw_precheck.screen.assert_called_once_with(path)
+        meta.extract_metadata.assert_not_called()
+        vision.tag_image.assert_not_called()
+        storage.store_image.assert_not_called()
+        kwargs = pipeline.db.create_or_update.call_args.kwargs
+        assert kwargs["table"] == "failure_log"
+        assert kwargs["data"]["stage"] == "nsfw_precheck"
+        assert kwargs["data"]["error_type"] == "NSFWScreenError"
+
+    @patch("tagphy.tools.pipeline.app_root", return_value=APP_ROOT)
+    def test_precheck_on_screen_error_skips_vision_and_storage(self, _app_root):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/virtual/inbox/photo.jpg"
+        pipeline.nsfw_precheck.screen.side_effect = NSFWScreenError("model missing")
+
+        result = pipeline.run(path, precheck=True)
+
+        assert result["status"] == "fail"
+        assert result["stage"] == "nsfw_precheck"
+        vision.tag_image.assert_not_called()
+        storage.store_image.assert_not_called()
+        kwargs = pipeline.db.create_or_update.call_args.kwargs
+        assert kwargs["data"]["stage"] == "nsfw_precheck"
+        assert kwargs["data"]["error_type"] == "NSFWScreenError"
 
 
 class TestFailureLogWrite:
