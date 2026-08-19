@@ -28,7 +28,7 @@ JobState = Literal["idle", "running", "stopping"]
 
 
 class ScanLog(TypedDict):
-    status: Literal["success", "fail"]
+    status: str
     stage: str
     msg: str
 
@@ -49,11 +49,13 @@ class ScanJobController(metaclass=SingletonMeta):
     def job_state(self) -> JobState:
         return self.state
 
-    def start(self, path: str, config: dict = {}) -> None:
+    def start(self, path: str, config: dict | None = None) -> None:
         """Claim job under Lock. Validate path. Clear ring buffer. Spawn worker.
         Raises BusyError if not idle → route maps to 409.
         Raises ValueError if path invalid / outside app_root / is Photo_Tagged.
         """
+
+        scan_config = config or {}
 
         def _worker():
             try:
@@ -62,19 +64,29 @@ class ScanJobController(metaclass=SingletonMeta):
                     self.log_queue.get_nowait()
                 self.pipeline.run(
                     path=path,
-                    precheck=config.get("privacy_pre_check", True),
+                    precheck=scan_config.get("privacy_pre_check", True),
                     should_stop=self.stop_event.is_set,
                     on_progress=self._enqueue,
                 )
+            except Exception as exc:
+                self._enqueue(
+                    {
+                        "status": "fail",
+                        "stage": "final",
+                        "msg": f"Scan job failed: {exc}",
+                    }
+                )
             finally:
+                # Enqueue first: _enqueue takes _lock, so do not hold it here
+                # (non-reentrant Lock → deadlock, which also blocks async stop/status).
+                self._enqueue(
+                    {
+                        "status": "complete",
+                        "stage": "final",
+                        "msg": "Job Finished. This does not indicate success or failure.",
+                    }
+                )
                 with self._lock:
-                    self._enqueue(
-                        {
-                            "status": "complete",
-                            "stage": "final",
-                            "msg": f"Job Finished. This does not indicate success or failure.",
-                        }
-                    )
                     self.state = "idle"
 
         with self._lock:

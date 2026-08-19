@@ -59,6 +59,25 @@ export function ScanPage() {
     };
   }, []);
 
+  function startStatusPolling() {
+    if (checkStatusIntervalRef.current) {
+      clearInterval(checkStatusIntervalRef.current);
+    }
+    checkStatusIntervalRef.current = window.setInterval(async () => {
+      try {
+        const { status } = await getScanStatus();
+        setJobStatus(status);
+        if (status === "idle") {
+          clearInterval(checkStatusIntervalRef.current!);
+          checkStatusIntervalRef.current = null;
+          setPath("");
+        }
+      } catch {
+        // Ignore transient poll errors; websocket may still deliver logs.
+      }
+    }, 1000);
+  }
+
   async function onConfirmScan() {
     if (!path || isBusy(jobStatus)) return;
     setScanConfirmOpen(false);
@@ -67,6 +86,7 @@ export function ScanPage() {
     try {
       const { status } = await startScan(path);
       setJobStatus(status);
+      startStatusPolling();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start scan");
     }
@@ -77,18 +97,8 @@ export function ScanPage() {
     setError(null);
     try {
       const { status } = await stopScan();
-      setJobStatus(status as ScanJobStatus);
-
-      checkStatusIntervalRef.current = setInterval(async () => {
-        const { status } = await getScanStatus();
-        setJobStatus(status as ScanJobStatus);
-
-        if (status === "idle") {
-          clearInterval(checkStatusIntervalRef.current!);
-          checkStatusIntervalRef.current = null;
-        }
-      }, 1000);
-      setPath("");
+      setJobStatus(status);
+      startStatusPolling();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to stop scan");
     }

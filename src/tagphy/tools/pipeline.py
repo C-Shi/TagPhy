@@ -126,7 +126,18 @@ class ImageProcessingPipeline:
             )
 
         if precheck:
-            result = self.nsfw_precheck.screen(image_path)
+            try:
+                result = self.nsfw_precheck.screen(image_path)
+            except NSFWScreenError as e:
+                if on_progress:
+                    on_progress(
+                        {
+                            "status": "fail",
+                            "stage": "run",
+                            "msg": f"Privacy pre-check error: {image_path} ({e})",
+                        }
+                    )
+                return self._failure(image_path, "nsfw_precheck", e)
             if result == "blocked":
                 if on_progress:
                     on_progress(
