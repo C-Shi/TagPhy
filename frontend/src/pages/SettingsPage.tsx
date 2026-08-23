@@ -185,10 +185,10 @@ export function SettingsPage() {
                       </div>
                       <p className="mt-2 text-sm leading-relaxed text-ink-muted">
                         Before Gemini tags a photo, TagPhy runs a local screen
-                        for intimate content and likely PII (IDs, forms,
-                        screenshots). Flagged files are skipped: not tagged, not
-                        uploaded, not moved. This is best-effort, not a
-                        guarantee.
+                        for intimate / NSFW content. Flagged files are skipped:
+                        not tagged, not uploaded, not moved. This is
+                        best-effort, not a guarantee. It does not screen IDs or
+                        other PII.
                       </p>
                     </div>
                     <Switch
@@ -210,7 +210,7 @@ export function SettingsPage() {
                     ) : (
                       <p className="text-label-orange">
                         Every scanned photo may be sent to Gemini, including
-                        intimate or document shots mixed into unsorted folders.
+                        intimate shots mixed into unsorted folders.
                       </p>
                     )}
                   </div>
