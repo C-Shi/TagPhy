@@ -6,43 +6,21 @@ alwaysApply: false
 ## Guiding principle
 
 - The scan pipeline (metadata, vision, storage, orchestration) is **plain Python functions**. Vision tagging is a **direct Gemini API call** (`google-genai`) behind `ImageVision`, not an LlmAgent. Optional local ONNX is a **privacy pre-check** (NSFW) before Gemini — not a tagging engine and not a local VLM.
-- ADK is used **only where an agent is genuinely needed**: judgment, tool selection, iteration, or natural-language interaction. That lives in Stage Seven (Catalog Assistant), which is also where the ADK learning goal is fulfilled.
+- ADK is used **only where an agent is genuinely needed**: judgment, tool selection, iteration, or natural-language interaction. That is Stage Seven (below), which also fulfills the ADK learning goal.
 - Rule of thumb: **Need a model? Call a model. Need an agent? Only if something must decide what to do next.**
 
 ## Non-agent baseline (Stages One–Six) — complete
 
-Product loop for learning SE + local ONNX integration is closed. No further non-agent stories are in scope for now. Polish, packaging, concurrency, and extra ML features are intentionally **not** planned until after Stage Seven (or a later reopen).
+Product loop for learning SE + local ONNX is closed. No further non-agent stories for now. Polish, packaging, concurrency, and non-agent ML extras stay off the board until Stage Seven is done (or you reopen them).
 
-### Stage One: Setup — **Done**
-
-Project skeleton and tooling.
-
-### Stage Two: Core pipeline (CLI, Gemini) — **Done**
-
-Metadata → vision (direct Gemini) → storage (`Photo_Tagged/<year>/`), with year tags from EXIF only.
-
-### Stage Three: Multi-file / directory scan — **Done**
-
-Facilitator walks files/dirs (excluding `Photo_Tagged/`), runs the pipeline per image. Parallel chunk workers are **out of scope** (not required for the agent learning path).
-
-### Stage Four: Database — **Done**
-
-SQLite schema + migrations; move-then-DB writes; failure log; vision prefers existing tags / specificity. See `src/tagphy/db/`.
-
-### Stage Five: Web GUI (FastAPI + React) — **Done**
-
-As shipped for this cut:
-
-- `/scan`: path pick, start/stop, WebSocket (or equivalent) log stream, scan lock.
-- `/library`: tags sidebar + picture preview grid, pagination, tag filter.
-- Tags browse / tag pictures / picture detail as implemented in tree.
-
-Open polish (AND filter, redirects, richer galleries, etc.) is **not** on the board.
-
-### Stage Six: Privacy gate — **Done**
-
-- **6.1** Settings (`privacy_pre_check`) + Settings UI.
-- **6.2** Local NSFW ONNX pre-check; fail closed; no Gemini / no move on block.
+| Stage                                        | Status                                   |
+| -------------------------------------------- | ---------------------------------------- |
+| One — Setup                                  | **Done**                                 |
+| Two — Core pipeline (CLI, Gemini)            | **Done**                                 |
+| Three — Multi-file / directory scan          | **Done** (no parallel workers)           |
+| Four — SQLite catalog                        | **Done**                                 |
+| Five — Web GUI (scan, library, tags, detail) | **Done** (polish not on board)           |
+| Six — Settings + NSFW ONNX gate              | **Done** (PII / ID-doc gate **removed**) |
 
 ```text
 metadata → (if privacy_pre_check) NSFW ONNX
@@ -50,34 +28,69 @@ metadata → (if privacy_pre_check) NSFW ONNX
          → blocked/fail: failure_log, skip file
 ```
 
-**Removed / never shipping in this plan:** PII or identity-document screening (OCR+NER, custom YOLO ID models, local VLM). No ready weights without ML training; dropped so focus stays on agents.
+## Stage Seven: Agent system (ADK) — **next / only remaining track**
 
-Honesty: NSFW gate is best-effort, not a compliance guarantee.
+Living design for the Catalog Assistant and specialists. Challenge it when implementation starts. Former `.cursor/rules/agent-planning.mdc` content lives here.
 
-## Remaining work (agents)
+### Boundaries
 
-### Stage Seven: Catalog Assistant Agent (ADK) — **next**
+- Keep metadata → vision → storage **deterministic**. Agents do **not** replace the scan loop.
+- Agents own natural-language intent, iterative decisions, tool choice, and human clarification.
+- Python functions own retrieval, scoring, embedding compare, DB writes, and file ops.
+- Search / investigation tools are **read-only**.
+- Tag replace, entity backfill, file moves, and archival need **explicit human confirmation**.
+- Persistent knowledge stays in **SQLite**; chat transcript is not memory.
 
-1. Build an ADK LlmAgent with tools over the existing pipeline functions and DB:
-   - Search photos by natural language.
-   - Explain why a photo landed in `Unknown`.
-   - Merge / rename tags.
-   - Re-run vision on selected photos.
-   - Review the failure log and decide retry / skip / ask.
-2. Exercise ADK concepts for real (FunctionTool, session state, Runner, `adk web`). Reintroduce `agents/` as needed. Agent use case only — not inlined into the scan loop.
+### Use cases
+
+#### Multi-agent
+
+1. **Catalog Concierge**
+   - Coordinate the interactive system; route to specialists.
+   - Do not directly mutate files or DB rows.
+
+2. **Interactive Photo Finder** — first conversational specialist (look for photo based on DB saved info)
+   - Natural-language memory of a photo.
+   - Search descriptions, tags, metadata, dates, locations, tag DAG.
+   - Show likely thumbnails; remember rejects and constraints.
+   - Ask focused follow-ups; broaden/narrow until the user finds the photo.
+
+3. **Entity Onboarding** — must-have
+   - Descriptions of named subjects (e.g. Meowy, Jelly).
+   - Candidate photos; user confirms reference images.
+   - Persistent embedding profiles from confirmed refs.
+   - Backfill only high-confidence entity tags; ambiguous → user.
+   - Later scans can add both generic (`cat`) and entity (`Meowy`) tags.
+
+4. **Duplicate Resolver** — optional
+   - Investigator: hashes, embeddings, metadata, dimensions, previews.
+   - Judge: recommend canonical copy + evidence.
+   - Never auto-delete; approve + archive rejects for review.
+
+_(Earlier “Catalog Assistant” one-liner — search, explain `Unknown`, merge tags, re-run vision, triage failure log — is covered by Concierge + Photo Finder + Reanalysis tools, not a separate product.)_
+
+### Development sequence
+
+1. Non-agent baseline finished ← **here now**.
+2. SQLite catalog queries, description search, thumbnail retrieval, structured tool return values.
+3. **Interactive Photo Finder** (first conversational specialist) + ADK basics (`FunctionTool`, session state, Runner, `adk web`; reintroduce `agents/` as needed).
+4. Image embeddings, reference-image records, confidence thresholds, correction-driven profile recalibration.
+5. **Entity Onboarding**; wire confirmed profiles into future scans.
+6. **Catalog Concierge** once multiple specialists exist; route through it.
+7. **Duplicate Resolver** after hash/embedding similarity and safe archive exist.
 
 ## Explicitly out of scope (for now)
 
-Do not write Trello stories for these until Stage Seven is underway or the user reopens them:
+Not Trello stories until you reopen them (agent-track items above are **in** scope via Stage Seven):
 
 - Multi-thread / multi-process scan workers
-- Desktop packaging (Mac/Windows wrappers, single entrypoint)
-- Naming-collision / deep error-handling epics beyond what already exists
-- Local VLM tagging, few-shot entity embeddings, tag-count caps
+- Desktop packaging (Mac/Windows, single entrypoint)
+- Naming-collision / deep error-handling epics beyond what exists
+- Local VLM tagging; generic “tag count cap” product stories
 - PII / ID-document visual or OCR gates
 - Stage Five UI polish follow-ups
 
 ## Status
 
-**Non-agent work (Stages One–Six): complete for this project cut.**  
-**Next: Stage Seven — Catalog Assistant (ADK).**
+**Stages One–Six (non-agent): complete for this cut.**  
+**Next: Stage Seven — start at sequence step 2–3 (catalog tool APIs + Interactive Photo Finder / ADK).**
