@@ -77,7 +77,7 @@ class TestGeminiVisionEngine:
         assert "tag_relations" in schema["properties"]
         assert schema["properties"]["tags"]["minItems"] == 1
         assert schema["properties"]["tags"]["maxItems"] == 3
-        assert set(schema["required"]) == {"tags", "tag_relations"}
+        assert set(schema["required"]) == {"tags", "tag_relations", "description"}
         contents = kwargs["contents"]
         assert len(contents) == 2
         catalog_part = contents[1]
@@ -87,18 +87,14 @@ class TestGeminiVisionEngine:
     def test_api_failure_propagates(self):
         engine = self._engine_with_fake_client()
         engine.get_image_thumbnail = MagicMock(return_value=b"jpeg-bytes")
-        engine.client.models.generate_content.side_effect = RuntimeError(
-            "api down"
-        )
+        engine.client.models.generate_content.side_effect = RuntimeError("api down")
 
         with pytest.raises(RuntimeError, match="api down"):
             engine.tag_image("photo.jpg")
 
     def test_thumbnail_failure_propagates(self):
         engine = self._engine_with_fake_client()
-        engine.get_image_thumbnail = MagicMock(
-            side_effect=OSError("cannot open")
-        )
+        engine.get_image_thumbnail = MagicMock(side_effect=OSError("cannot open"))
 
         with pytest.raises(OSError, match="cannot open"):
             engine.tag_image("bad.jpg")

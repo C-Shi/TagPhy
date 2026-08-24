@@ -17,7 +17,7 @@ class ImageVision(ABC):
     @property
     def system_instruction(self) -> str:
         return """
-            You tag photos for a searchable catalog. Return minimum of one, and maximum of three tags, and any needed tag_relations.
+            You tag photos for a searchable catalog. Return minimum of one, and maximum of three tags, a brief description of the image based on what you see, and any needed tag_relations.
 
             Categories (most → least important). Use at most one tag per category, and at most three tags total:
             1. Subject — what the photo is mainly of
@@ -29,7 +29,7 @@ class ImageVision(ABC):
 
             Tagging rules:
             - Tag from image content only, not filename or metadata.
-            - Always tag the most obvious, significant content (usually Subject).
+            - Always tag the most obvious, significant content (usually Subject). You should group equally important subject into a single tag (eg: A woman holding a baby should be tagged as "family").
             - After having at least one tag, optionally add tags from context from other categories; omit if not 99% confident.
             - Prefer the most specific accurate noun (cat over animal).
             - English, one word, singular noun, lowercase — except established proper/tech forms (USA, iPhone, China).
@@ -48,11 +48,18 @@ class ImageVision(ABC):
             - Do not create relations between tags on the same image.
             - If the catalog is empty, or no returned tag relates to any catalog tag, return an empty tag_relations list.
 
+            Image Description Rule:
+            - Describe the image in a way that is easy to understand and visualize.
+            - Use simple language and avoid technical terms.
+            - Use one sentence only and no more than 50 words.
+            - Describe the image in a way that the picture own would describe it to a random person who is not familiar with the image.
+
             Example 1 — empty catalog
             Existing catalog tags: (none)
             Image: a cat on a balcony
             Output:
                 {
+                    "description": "A cat sitting on a balcony.",
                     "tags": ["cat", "balcony"],
                     "tag_relations": []
                 }
@@ -63,6 +70,7 @@ class ImageVision(ABC):
             Image: a cat on a balcony
             Output:
                 {
+                    "description": "A cat sitting on a balcony.",
                     "tags": ["cat", "balcony"],
                     "tag_relations": [
                         {"parent": "animal", "child": "cat"}
@@ -75,6 +83,7 @@ class ImageVision(ABC):
             Image: a man
             Output:
                 {
+                    "description": "A straigh head shot of a man,
                     "tags": ["man"],
                     "tag_relations": [
                         {"parent": "human", "child": "man"},
@@ -148,8 +157,13 @@ class GeminiVisionEngine(ImageVision):
                         "minItems": 0,
                         "maxItems": 6,
                     },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 50,
+                    },
                 },
-                "required": ["tags", "tag_relations"],
+                "required": ["tags", "tag_relations", "description"],
             },
             system_instruction=self.system_instruction,
         )

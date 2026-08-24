@@ -27,6 +27,7 @@ class ImageStorage:
 
         tag_relations = vision_response.get("tag_relations", [])
         tags_db = list(vision_response.get("tags") or [])
+        description = vision_response.get("description") or ""
 
         if metadata.get("year"):
             tags_db.append(year)
@@ -51,7 +52,7 @@ class ImageStorage:
         try:
             stage = "DB_WRITE"
             image_id = self._update_db_record(
-                destination_path, metadata, tags_db, tag_relations
+                destination_path, metadata, tags_db, tag_relations, description
             )
             stage = "FILE_MOVE"
             move(image_path, destination_path)
@@ -73,6 +74,7 @@ class ImageStorage:
         metadata: dict[str, str],
         tags: list[str],  # already contain year
         tag_relations: list[dict[str, str]],
+        description: str,
     ):
         """Write image, first-or-create tags, and image_tags join rows."""
 
@@ -90,6 +92,7 @@ class ImageStorage:
                     "file_name": os.path.basename(destination_path),
                     "year": year,
                     "location": metadata.get("location") or "",
+                    "description": description,
                 },
             )
             # Insert Tags
