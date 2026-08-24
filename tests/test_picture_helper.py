@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tagphy.web.utils.picture_helper import PictureHelper
+from tagphy.tools.db_operations import PictureHelper
 
 TAG_A = 1
 TAG_B = 2
@@ -109,9 +109,7 @@ class TestGetPicturesForTags:
         db.query.return_value = [P1]
         helper = PictureHelper(db=db)
 
-        result = helper.get_pictures_for_tags(
-            tag_ids=[[TAG_A], [TAG_C]], logic="AND"
-        )
+        result = helper.get_pictures_for_tags(tag_ids=[[TAG_A], [TAG_C]], logic="AND")
 
         assert result == [P1]
         sql = _normalize_sql(db.query.call_args[0][0])
@@ -125,9 +123,7 @@ class TestGetPicturesForTags:
         db.query.return_value = []
         helper = PictureHelper(db=db)
 
-        result = helper.get_pictures_for_tags(
-            tag_ids=[[TAG_B], [TAG_C]], logic="AND"
-        )
+        result = helper.get_pictures_for_tags(tag_ids=[[TAG_B], [TAG_C]], logic="AND")
 
         assert result == []
         sql = _normalize_sql(db.query.call_args[0][0])
@@ -141,9 +137,7 @@ class TestGetPicturesForTags:
         db.query.return_value = [P1, P2, P3]
         helper = PictureHelper(db=db)
 
-        result = helper.get_pictures_for_tags(
-            tag_ids=[TAG_A, TAG_B, TAG_C], logic="OR"
-        )
+        result = helper.get_pictures_for_tags(tag_ids=[TAG_A, TAG_B, TAG_C], logic="OR")
 
         assert result == [P1, P2, P3]
         sql = _normalize_sql(db.query.call_args[0][0])

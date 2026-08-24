@@ -1,5 +1,4 @@
 from typing import Any
-from ..utils.picture_helper import PictureHelper
 
 
 class TagHelper:

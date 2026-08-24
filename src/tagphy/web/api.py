@@ -2,7 +2,8 @@ from fastapi import APIRouter, Body, HTTPException, status, Response, Query
 from fastapi.responses import JSONResponse
 from typing import Annotated, Any
 from tagphy.db import SQLiteConnection
-from tagphy.web.utils import SettingsStore, PictureHelper, TagHelper, BrowseHelper
+from tagphy.web.utils import SettingsStore, BrowseHelper
+from tagphy.tools.db_operations import TagHelper, PictureHelper
 from tagphy.tools import ScanJobController, BusyError, ImageProcessingPipeline
 
 router = APIRouter(prefix="/api")

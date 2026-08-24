@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tagphy.web.utils.tag_helper import TagHelper
+from tagphy.tools.db_operations import TagHelper
 
 TAG_RESPONSE_KEYS = {"id", "name", "source", "photo_count", "children", "parents"}
 TAG_PICTURE_RESPONSE_KEYS = {"id", "name", "source", "children", "parents"}
