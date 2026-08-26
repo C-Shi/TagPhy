@@ -160,7 +160,7 @@ class GeminiVisionEngine(ImageVision):
                     "description": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 50,
+                        "maxLength": 500,
                     },
                 },
                 "required": ["tags", "tag_relations", "description"],
