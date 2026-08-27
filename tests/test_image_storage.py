@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from tagphy.tools.image_storage import ImageStorage
@@ -55,8 +56,11 @@ class TestStoreImageDestination:
     ):
         storage = _storage()
         metadata = {"year": "2024", "location": None}
+        embeded_text = np.array([0.1, 0.2, 0.3])
 
-        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+        result = storage.store_image(
+            SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+        )
 
         expected = f"{WORKDIR}/2024/vacation.HEIC"
         mock_makedirs.assert_called_once_with(f"{WORKDIR}/2024", exist_ok=True)
@@ -73,13 +77,14 @@ class TestStoreImageDestination:
     ):
         storage = _storage()
         metadata = {"year": None, "location": None}
+        embeded_text = np.array([0.1, 0.2, 0.3])
 
-        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+        result = storage.store_image(
+            SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+        )
 
         expected = f"{WORKDIR}/Unknown/vacation.HEIC"
-        mock_makedirs.assert_called_once_with(
-            f"{WORKDIR}/Unknown", exist_ok=True
-        )
+        mock_makedirs.assert_called_once_with(f"{WORKDIR}/Unknown", exist_ok=True)
         mock_move.assert_called_once_with(SOURCE, expected)
         assert result["destination_path"] == expected
 
@@ -94,8 +99,10 @@ class TestStoreImageYearTag:
     ):
         storage = _storage()
         metadata = {"year": "2025", "location": None}
-
-        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        result = storage.store_image(
+            SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+        )
 
         assert "2025" in result["tags"]
         assert "year" not in result["tags"]
@@ -111,13 +118,14 @@ class TestStoreImageYearTag:
     ):
         storage = _storage()
         metadata = {"year": None, "location": None}
-
-        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        result = storage.store_image(
+            SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+        )
 
         assert "Unknown" not in result["tags"]
         assert not any(
-            isinstance(t, str) and t.isdigit() and len(t) == 4
-            for t in result["tags"]
+            isinstance(t, str) and t.isdigit() and len(t) == 4 for t in result["tags"]
         )
 
     @_patch_app_root()
@@ -129,8 +137,10 @@ class TestStoreImageYearTag:
     ):
         storage = _storage()
         metadata = {"year": "2025", "location": "Calgary, CA"}
-
-        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        result = storage.store_image(
+            SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+        )
 
         assert "Calgary, CA" not in result["tags"]
 
@@ -144,12 +154,12 @@ class TestStoreImageYearTag:
         """Vision must never invent the year folder; metadata year wins."""
         storage = _storage()
         metadata = {"year": None, "location": None}
-
-        result = storage.store_image(SOURCE, metadata, _vision("2020", "cat"))
-
-        mock_makedirs.assert_called_once_with(
-            f"{WORKDIR}/Unknown", exist_ok=True
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        result = storage.store_image(
+            SOURCE, metadata, _vision("2020", "cat"), embeded_text
         )
+
+        mock_makedirs.assert_called_once_with(f"{WORKDIR}/Unknown", exist_ok=True)
         assert result["destination_path"].startswith(f"{WORKDIR}/Unknown/")
         mock_move.assert_called_once()
 
@@ -164,8 +174,8 @@ class TestStoreImageYearTag:
         metadata = {"year": "2025", "location": None}
         vision_tags = ["cat"]
         vision = {"tags": vision_tags, "tag_relations": []}
-
-        storage.store_image(SOURCE, metadata, vision)
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        storage.store_image(SOURCE, metadata, vision, embeded_text)
 
         assert vision_tags == ["cat"]
 
@@ -179,8 +189,11 @@ class TestStoreImageFailures:
     ):
         storage = _storage()
         metadata = {"year": "2024", "location": None}
+        embeded_text = np.array([0.1, 0.2, 0.3])
 
-        result = storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+        result = storage.store_image(
+            SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+        )
 
         mock_move.assert_not_called()
         mock_makedirs.assert_not_called()
@@ -190,15 +203,15 @@ class TestStoreImageFailures:
     @patch("tagphy.tools.image_storage.move")
     @patch("tagphy.tools.image_storage.os.makedirs")
     @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
-    def test_move_failure_propagates(
-        self, _exists, _makedirs, mock_move, _app_root
-    ):
+    def test_move_failure_propagates(self, _exists, _makedirs, mock_move, _app_root):
         mock_move.side_effect = OSError("disk full")
         storage = _storage()
         metadata = {"year": "2024", "location": None}
-
+        embeded_text = np.array([0.1, 0.2, 0.3])
         with pytest.raises(OSError, match="disk full"):
-            storage.store_image(SOURCE, metadata, _vision("cat", "balcony"))
+            storage.store_image(
+                SOURCE, metadata, _vision("cat", "balcony"), embeded_text
+            )
 
 
 class TestStoreImageDbWrite:
@@ -212,8 +225,10 @@ class TestStoreImageDbWrite:
         db = _db_for_tags(tag_ids=[1, 2, 3])
         storage = _storage(db=db)
         metadata = {"year": "2025", "location": "Calgary, CA"}
-
-        storage.store_image(SOURCE, metadata, _vision("ukulele", "instrument"))
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        storage.store_image(
+            SOURCE, metadata, _vision("ukulele", "instrument"), embeded_text
+        )
 
         db.transaction.assert_called_once()
         image_insert = db.insert.call_args_list[0]
@@ -222,20 +237,18 @@ class TestStoreImageDbWrite:
         assert not image_insert.args[1]["file_path"].startswith("/")
         assert image_insert.args[1]["year"] == "2025"
         assert image_insert.args[1]["location"] == "Calgary, CA"
+        assert image_insert.args[1]["description_embedding"] == embeded_text.astype(
+            np.float32
+        ).tobytes()
 
-        tag_names = [
-            c.args[1]["name"] for c in db.first_or_create.call_args_list
-        ]
+        tag_names = [c.args[1]["name"] for c in db.first_or_create.call_args_list]
         assert tag_names == ["ukulele", "instrument", "2025"]
         assert all(
-            c.kwargs.get("conflict_columns") == "name"
-            or c.args[0] == "tags"
+            c.kwargs.get("conflict_columns") == "name" or c.args[0] == "tags"
             for c in db.first_or_create.call_args_list
         )
 
-        join_calls = [
-            c for c in db.insert.call_args_list if c.args[0] == "image_tags"
-        ]
+        join_calls = [c for c in db.insert.call_args_list if c.args[0] == "image_tags"]
         assert len(join_calls) == 3
         assert {c.args[1]["image_id"] for c in join_calls} == {101}
 
@@ -267,11 +280,13 @@ class TestStoreImageDbWrite:
             "/virtual/inbox/a.HEIC",
             {"year": "2025", "location": ""},
             _vision("ukulele", "instrument"),
+            np.array([0.1, 0.2, 0.3]),
         )
         storage.store_image(
             "/virtual/inbox/b.HEIC",
             {"year": "2024", "location": ""},
             _vision("ukulele", "music"),
+            np.array([0.1, 0.2, 0.3]),
         )
 
         ukulele_calls = [
@@ -297,12 +312,10 @@ class TestStoreImageDbWrite:
             "balcony",
             relations=[{"parent": "animal", "child": "cat"}],
         )
+        embeded_text = np.array([0.1, 0.2, 0.3])
+        storage.store_image(SOURCE, metadata, vision, embeded_text)
 
-        storage.store_image(SOURCE, metadata, vision)
-
-        edge_inserts = [
-            c for c in db.insert.call_args_list if c.args[0] == "tag_edges"
-        ]
+        edge_inserts = [c for c in db.insert.call_args_list if c.args[0] == "tag_edges"]
         assert len(edge_inserts) == 1
         assert edge_inserts[0].args[1] == {"parent_id": 4, "child_id": 1}
         relation_tag_names = [
@@ -323,23 +336,19 @@ class TestStoreImageDbWrite:
             "cat",
             relations=[{"parent": "cat", "child": "cat"}],
         )
-
+        embeded_text = np.array([0.1, 0.2, 0.3])
         storage.store_image(
-            SOURCE, {"year": None, "location": ""}, vision
+            SOURCE, {"year": None, "location": ""}, vision, embeded_text
         )
 
-        assert not any(
-            c.args[0] == "tag_edges" for c in db.insert.call_args_list
-        )
+        assert not any(c.args[0] == "tag_edges" for c in db.insert.call_args_list)
         db.query.assert_not_called()
 
     @_patch_app_root()
     @patch("tagphy.tools.image_storage.move")
     @patch("tagphy.tools.image_storage.os.makedirs")
     @patch("tagphy.tools.image_storage.os.path.exists", return_value=False)
-    def test_skips_edge_when_cycle_detected(
-        self, _exists, _makedirs, _move, _app_root
-    ):
+    def test_skips_edge_when_cycle_detected(self, _exists, _makedirs, _move, _app_root):
         db = _db_for_tags(tag_ids=[1, 2, 2])
         db.query.return_value = [{"1": 1}]
         storage = _storage(db=db)
@@ -347,14 +356,12 @@ class TestStoreImageDbWrite:
             "animal",
             relations=[{"parent": "animal", "child": "cat"}],
         )
-
+        embeded_text = np.array([0.1, 0.2, 0.3])
         storage.store_image(
-            SOURCE, {"year": None, "location": ""}, vision
+            SOURCE, {"year": None, "location": ""}, vision, embeded_text
         )
 
-        assert not any(
-            c.args[0] == "tag_edges" for c in db.insert.call_args_list
-        )
+        assert not any(c.args[0] == "tag_edges" for c in db.insert.call_args_list)
         db.query.assert_called_once()
 
 
@@ -376,6 +383,7 @@ class TestCompensatingDelete:
                 SOURCE,
                 {"year": "2024", "location": None},
                 _vision("cat", "balcony"),
+                np.array([0.1, 0.2, 0.3]),
             )
 
         db.delete.assert_called_once_with("images", {"id": 42})
@@ -396,6 +404,7 @@ class TestCompensatingDelete:
                 SOURCE,
                 {"year": "2024", "location": None},
                 _vision("cat", "balcony"),
+                np.array([0.1, 0.2, 0.3]),
             )
 
         db.delete.assert_not_called()

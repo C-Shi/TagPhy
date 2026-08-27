@@ -19,6 +19,7 @@ dependencies = [
   "google-genai",
   "numpy",
   "onnxruntime",
+  "tokenizers",
 ]
 
 [project.scripts]

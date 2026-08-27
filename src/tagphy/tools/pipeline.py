@@ -11,6 +11,7 @@ from tagphy.tools import (
     ImageStorage,
     NSFWPreCheck,
     NSFWScreenError,
+    TextEmbedding,
 )
 from tagphy.db.connection import SQLiteConnection
 
@@ -48,6 +49,7 @@ class ImageProcessingPipeline:
         self.image_metadata = ImageMetadata()
         self.image_vision = GeminiVisionEngine(db=self.db)
         self.nsfw_precheck = NSFWPreCheck()
+        self.text_embedding = TextEmbedding()
         self.image_storage = ImageStorage(workdir=str(self.workdir), db=self.db)
 
     def validate_path(self, path: str | Path) -> bool:
@@ -160,7 +162,15 @@ class ImageProcessingPipeline:
         except Exception as e:
             return self._failure(image_path, "tag_image", e)
         try:
-            return self.image_storage.store_image(image_path, metadata, vision_response)
+            embeded_text = self.text_embedding.embed_text(
+                vision_response.get("description", "")
+            )
+        except Exception as e:
+            return self._failure(image_path, "embed_text", e)
+        try:
+            return self.image_storage.store_image(
+                image_path, metadata, vision_response, embeded_text
+            )
         except Exception as e:
             return self._failure(image_path, "store_image", e)
 
@@ -364,5 +374,5 @@ if __name__ == "__main__":
     db = SQLiteConnection()
     db.migrate()
     pipeline = ImageProcessingPipeline()
-    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/test")
+    result = pipeline.run("/Users/cheng/Documents/Developer/TagPhy/dev/5.HEIC")
     print(result)

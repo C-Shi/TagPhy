@@ -5,8 +5,10 @@ from unittest.mock import MagicMock, patch
 
 from tagphy.tools.nsfw_precheck import NSFWScreenError
 from tagphy.tools.pipeline import BATCH_SIZE, PROGRESS_INTERVAL, ImageProcessingPipeline
+import numpy as np
 
 APP_ROOT = Path("/virtual")
+EMBED_VEC = np.zeros(384, dtype=np.float32)
 
 
 def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
@@ -14,12 +16,15 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     db = MagicMock()
     nsfw = MagicMock()
     nsfw.screen.return_value = "clear"
+    embed = MagicMock()
+    embed.embed_text.return_value = EMBED_VEC
     with (
         patch("tagphy.tools.pipeline.ImageMetadata") as Meta,
         patch("tagphy.tools.pipeline.GeminiVisionEngine") as Vision,
         patch("tagphy.tools.pipeline.ImageStorage") as Storage,
         patch("tagphy.tools.pipeline.SQLiteConnection", return_value=db),
         patch("tagphy.tools.pipeline.NSFWPreCheck", return_value=nsfw),
+        patch("tagphy.tools.pipeline.TextEmbedding", return_value=embed),
     ):
         meta = MagicMock()
         vision = MagicMock()
@@ -32,6 +37,7 @@ def _pipeline_with_mocks(workdir="/virtual/Photo_Tagged"):
     pipeline.image_vision = vision
     pipeline.image_storage = storage
     pipeline.nsfw_precheck = nsfw
+    pipeline.text_embedding = embed
     pipeline.db = db
     return pipeline, meta, vision, storage
 
@@ -52,6 +58,7 @@ class TestPipelineSuccess:
             "destination_path": "/virtual/Photo_Tagged/2024/photo.jpg",
             "tags": ["cat", "balcony", "2024"],
             "metadata": metadata,
+            "description_embedding": np.array([0.1, 0.2, 0.3]).tobytes(),
         }
         meta.extract_metadata.return_value = metadata
         vision.tag_image.return_value = vision_response
@@ -61,24 +68,32 @@ class TestPipelineSuccess:
 
         meta.extract_metadata.assert_called_once_with(path)
         vision.tag_image.assert_called_once_with(path)
-        storage.store_image.assert_called_once_with(path, metadata, vision_response)
+        storage.store_image.assert_called_once_with(
+            path, metadata, vision_response, EMBED_VEC
+        )
         assert result == stored
 
     def test_passes_metadata_and_vision_outputs_to_storage(self):
         pipeline, meta, vision, storage = _pipeline_with_mocks()
         path = "relative/shot.HEIC"
         metadata = {"year": "2022", "location": "Calgary, CA"}
-        vision_response = {"tags": ["dog", "park"], "tag_relations": []}
+        vision_response = {
+            "tags": ["dog", "park"],
+            "tag_relations": [],
+            "description": "A dog in a park",
+        }
         meta.extract_metadata.return_value = metadata
         vision.tag_image.return_value = vision_response
         storage.store_image.return_value = {"ok": True}
 
         pipeline.run(path)
 
+        pipeline.text_embedding.embed_text.assert_called_once_with("A dog in a park")
         args = storage.store_image.call_args.args
         assert args[0] == path
         assert args[1] is metadata
         assert args[2] is vision_response
+        assert args[3] is EMBED_VEC
 
 
 class TestPipelineHardStop:
@@ -105,6 +120,25 @@ class TestPipelineHardStop:
 
         assert result["status"] == "fail"
         assert result["stage"] == "tag_image"
+        assert result["image"] == "photo.jpg"
+        pipeline.text_embedding.embed_text.assert_not_called()
+        storage.store_image.assert_not_called()
+
+    def test_embed_failure_skips_storage(self):
+        pipeline, meta, vision, storage = _pipeline_with_mocks()
+        path = "/virtual/inbox/photo.jpg"
+        meta.extract_metadata.return_value = {"year": "2024", "location": None}
+        vision.tag_image.return_value = {
+            "tags": ["cat"],
+            "tag_relations": [],
+            "description": "A cat",
+        }
+        pipeline.text_embedding.embed_text.side_effect = RuntimeError("onnx fail")
+
+        result = pipeline.run(path)
+
+        assert result["status"] == "fail"
+        assert result["stage"] == "embed_text"
         assert result["image"] == "photo.jpg"
         storage.store_image.assert_not_called()
 

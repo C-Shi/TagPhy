@@ -55,10 +55,11 @@ class TestGetPicturePreview:
 
         with (
             patch(
-                "tagphy.web.utils.picture_helper.app_root", return_value="/fake/root"
+                "tagphy.tools.db_operations.picture_helper.app_root",
+                return_value="/fake/root",
             ),
             patch(
-                "tagphy.web.utils.picture_helper.Image.open",
+                "tagphy.tools.db_operations.picture_helper.Image.open",
                 return_value=MagicMock(
                     __enter__=MagicMock(return_value=mock_img),
                     __exit__=MagicMock(return_value=False),

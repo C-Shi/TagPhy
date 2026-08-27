@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS images (
     year TEXT NOT NULL DEFAULT '',
     location TEXT DEFAULT '',
     description TEXT DEFAULT '',
+    description_embedding BLOB DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

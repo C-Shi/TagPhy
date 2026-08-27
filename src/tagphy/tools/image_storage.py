@@ -1,5 +1,6 @@
 from shutil import move
 import os
+import numpy as np
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,11 @@ class ImageStorage:
         self.db = db
 
     def store_image(
-        self, image_path: str, metadata: dict[str, str], vision_response: dict[str, Any]
+        self,
+        image_path: str,
+        metadata: dict[str, str],
+        vision_response: dict[str, Any],
+        embeded_text: np.ndarray,
     ) -> dict[str, Any]:
 
         # A variable to track the stage of the image storage process. Mainly for catch where the error happens
@@ -51,8 +56,14 @@ class ImageStorage:
 
         try:
             stage = "DB_WRITE"
+            description_embedding = embeded_text.astype(np.float32).tobytes()
             image_id = self._update_db_record(
-                destination_path, metadata, tags_db, tag_relations, description
+                destination_path,
+                metadata,
+                tags_db,
+                tag_relations,
+                description,
+                description_embedding,
             )
             stage = "FILE_MOVE"
             move(image_path, destination_path)
@@ -75,6 +86,7 @@ class ImageStorage:
         tags: list[str],  # already contain year
         tag_relations: list[dict[str, str]],
         description: str,
+        description_embedding: bytes,
     ):
         """Write image, first-or-create tags, and image_tags join rows."""
 
@@ -93,6 +105,7 @@ class ImageStorage:
                     "year": year,
                     "location": metadata.get("location") or "",
                     "description": description,
+                    "description_embedding": description_embedding,
                 },
             )
             # Insert Tags

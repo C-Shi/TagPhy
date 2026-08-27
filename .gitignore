@@ -21,7 +21,7 @@ frontend/dist/
 *.db-wal
 Photo_Tagged/
 dev/
-models/*.onnx
+models/
 
 # OS
 .DS_Store
