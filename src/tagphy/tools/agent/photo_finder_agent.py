@@ -1,133 +1,146 @@
 """
-This module contains the logic for finding photos based on the prompt. Photo Finder Agent will use it to:
+Catalog tools for the Photo Finder agent:
 
-- Get possible tags from the prompt
+1. get_all_tags — tag vocabulary for the LLM
+2. get_candidate_tags — name → id + descendants
+3. get_candidate_photos — pre-filter images by tags
+4. rank_photos — embed prompt, cosine rank, return preview refs
 """
 
 from typing import Literal
+
 import numpy as np
+
 from tagphy.db.connection import SQLiteConnection
-from tagphy.tools import TextEmbedding
 from tagphy.tools.db_operations.tag_helper import TagHelper
-from tagphy.tools.db_operations.picture_helper import PictureHelper
 from tagphy.tools.embedding import TextEmbedding
 
 db = SQLiteConnection()
 embedding_model = TextEmbedding()
 
 
-def get_all_tags() -> list[str]:
-    """Get all tags from the database."""
-    return db.select("tags", ["id", "name"])
+def get_all_tags() -> list[dict]:
+    """Get all tags from the database (id + name for the LLM)."""
+    return [dict(row) for row in db.query("SELECT id, name FROM tags ORDER BY name")]
 
 
 def get_candidate_tags(
     tag_names: list[str], logic: Literal["AND", "OR"] = "OR"
-) -> list[str]:
-    """Get possible tags from the tag names.
+) -> list[int] | list[list[int]]:
+    """Expand LLM-picked tag names to seed ids + descendant ids.
 
     Args:
-        tag_names: A list of unique, non-related tags that was extracted from prompt
+        tag_names: Catalog tag names extracted from the prompt.
+        logic: ``OR`` → flat ``list[int]`` (duplicates OK for SQL IN).
+               ``AND`` → ``list[list[int]]`` (one group per seed).
 
     Returns:
-        A list of possible tags.
+        Tag ids ready for ``get_candidate_photos``.
     """
-
-    tag_list = []
+    seed_ids: list[int] = []
+    for tag_name in tag_names:
+        rows = db.select("tags", ["id"], where={"name": tag_name})
+        if rows:
+            seed_ids.append(int(rows[0]["id"]))
 
     tag_helper = TagHelper(db)
 
-    for tag_name in tag_names:
-        sublist = tag_helper.get_descendants_tags(tag_name)
-        if logic == "OR":
-            tag_list.extend(sublist)
-        elif logic == "AND":
-            tag_list.extend([sublist])
+    if logic == "AND":
+        groups: list[list[int]] = []
+        for tag_id in seed_ids:
+            child_ids = [
+                int(child["id"]) for child in tag_helper.get_descendants_tags(tag_id)
+            ]
+            groups.append([tag_id, *child_ids])
+        return groups
 
-    tag_list = list(set(tag_list))
-
-    return tag_list
+    tag_ids: list[int] = list(seed_ids)
+    for tag_id in seed_ids:
+        tag_ids.extend(
+            int(child["id"]) for child in tag_helper.get_descendants_tags(tag_id)
+        )
+    return tag_ids
 
 
 def get_candidate_photos(
-    tag_ids: list[int | list[int]] = [], logic: Literal["AND", "OR"] = "OR"
+    tag_ids: list[int] | list[list[int]] | None = None,
+    logic: Literal["AND", "OR"] = "OR",
 ) -> list[dict]:
-    """
-    Get all pictures for a list of tags. This method will query for tag_ids passed ONLY. To include children tags, call recursive tag retrieval before passing in tag_ids
+    """Pre-filter images by tag ids (call get_candidate_tags first for DAG expand).
 
     Args:
-        tag_ids: A list of tag IDs (for OR logic), or a list of lists of tag IDs (for AND logic)
-        logic: The logic to use for the query (AND or OR)
+        tag_ids: Flat ids for OR, or list-of-lists for AND. Empty/None → all images.
+        logic: AND or OR across tag groups.
+    """
+    if tag_ids is None:
+        tag_ids = []
+
+    images_query = """
+        SELECT DISTINCT i.id, i.description, i.description_embedding
+        FROM images i
     """
 
-    try:
-        images_query = f"""
-            SELECT DISTINCT i.id, i.description_embedding
-            FROM images i
+    if len(tag_ids) == 0:
+        images_query += " ORDER BY i.created_at DESC"
+        return [dict(row) for row in db.query(images_query)]
+
+    if logic == "OR":
+        images_query += f"""
+            JOIN image_tags it ON i.id = it.image_id
+            WHERE it.tag_id IN ({",".join(["?"] * len(tag_ids))})
         """
+        return [
+            dict(row)
+            for row in db.query(images_query, [str(tid) for tid in tag_ids])
+        ]
 
-        if len(tag_ids) > 0:
-            if logic == "OR":
-                images_query += f"""
-                    JOIN image_tags it ON i.id = it.image_id
-                    WHERE it.tag_id IN ({",".join(["?"] * len(tag_ids))})
-                """
-                return db.query(images_query, [str(id) for id in tag_ids])
+    if logic == "AND":
+        images_query += """
+            JOIN image_tags it ON i.id = it.image_id
+            WHERE 
+        """
+        condition_query = []
+        for sublist in tag_ids:
+            x = ", ".join(["?" for _ in sublist])
+            condition_query.append(
+                f"EXISTS (SELECT 1 FROM image_tags WHERE image_id = i.id AND tag_id IN ({x}))"
+            )
+        images_query += " AND ".join(condition_query)
+        return [
+            dict(row)
+            for row in db.query(
+                images_query, [str(tid) for sublist in tag_ids for tid in sublist]
+            )
+        ]
 
-            if logic == "AND":
-                images_query += f"""
-                    JOIN image_tags it ON i.id = it.image_id
-                    WHERE 
-                """
-
-                condition_query = []
-                for sublist in tag_ids:
-                    x = ", ".join(["?" for _ in sublist])
-                    per_condition_query = f"EXISTS (SELECT 1 FROM image_tags WHERE image_id = i.id AND tag_id IN ({x}))"
-                    condition_query.append(per_condition_query)
-
-                images_query += " AND ".join(condition_query)
-                return db.query(
-                    images_query, [str(id) for sublist in tag_ids for id in sublist]
-                )
-        else:
-            images_query += "ORDER BY i.created_at DESC"
-            return db.query(images_query)
-
-    except ValueError as e:
-        if "Invalid Tag Selection Logic Type" in str(e):
-            raise ValueError(str(e))
-        raise ValueError(f"Invalid Tags")
-
-
-def rank_photos(description: str, photos: list[str], limit: int = 5) -> list[dict]:
-    """Rank photos based on the description and tags."""
-
-    vectors_generator = (
-        {
-            "id": photo["id"],
-            "vector": np.frombuffer(photo["description_embedding"], dtype=np.float32),
-        }
-        for photo in photos
+    raise ValueError(
+        f"Invalid Tag Selection Logic Type. Must be 'OR' or 'AND' but got {logic}"
     )
 
+
+def rank_photos(
+    description: str, photos: list[dict], limit: int = 5
+) -> list[dict]:
+    """Rank candidate photos by cosine similarity to the user description.
+
+    Returns top ``limit`` items with id, description, preview_url, similarity.
+    """
     vector_target = embedding_model.embed_text(description)
 
-    similarity_generator = (
-        {"id": vector["id"], "similarity": np.dot(vector["vector"], vector_target)}
-        for vector in vectors_generator
-    )
+    scored: list[dict] = []
+    for photo in photos:
+        blob = photo.get("description_embedding")
+        if blob is None:
+            continue
+        vec = np.frombuffer(blob, dtype=np.float32)
+        scored.append(
+            {
+                "id": photo["id"],
+                "description": photo.get("description") or "",
+                "preview_url": f"/api/pictures/{photo['id']}/preview",
+                "similarity": float(np.dot(vec, vector_target)),
+            }
+        )
 
-    return sorted(similarity_generator, key=lambda x: x["similarity"], reverse=True)[
-        :limit
-    ]
-
-
-if __name__ == "__main__":
-    photos = get_candidate_photos()
-
-    ranked_photos = rank_photos(
-        "My wife hold our son while sitting on a brown sofa.",
-        photos,
-    )
-    print(ranked_photos)
+    scored.sort(key=lambda x: x["similarity"], reverse=True)
+    return scored[:limit]
