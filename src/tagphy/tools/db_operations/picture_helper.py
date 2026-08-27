@@ -35,7 +35,7 @@ class PictureHelper:
 
         try:
             images_query = f"""
-                SELECT DISTINCT i.*
+                SELECT DISTINCT i.id, i.file_name, i.file_path, i.created_at, i.description
                 FROM images i
             """
 
