@@ -3,11 +3,13 @@ Catalog tools for the Photo Finder agent:
 
 1. get_all_tags — tag vocabulary for the LLM
 2. get_candidate_tags — name → id + descendants
-3. get_candidate_photos — pre-filter images by tags
-4. rank_photos — embed prompt, cosine rank, return preview refs
+3. get_candidate_photos_ids — pre-filter images by tags
+4. rank_photos — embed prompt, cosine rank, return fixed search_results schema
 """
 
-from typing import Literal
+from __future__ import annotations
+
+from typing import Any, Iterable, Literal
 
 import numpy as np
 
@@ -17,6 +19,10 @@ from tagphy.tools.embedding import TextEmbedding
 
 db = SQLiteConnection()
 embedding_model = TextEmbedding()
+
+# Fixed payload when presenting matches (UI: kind == search_results → gallery).
+SEARCH_RESULTS_TYPE = "search_results"
+RANK_TOOL_NAME = "tool_rank_photos"
 
 
 def get_all_tags() -> list[dict]:
@@ -35,7 +41,7 @@ def get_candidate_tags(
                ``AND`` → ``list[list[int]]`` (one group per seed).
 
     Returns:
-        Tag ids ready for ``get_candidate_photos``.
+        Tag ids ready for ``get_candidate_photos_ids``.
     """
     seed_ids: list[int] = []
     for tag_name in tag_names:
@@ -62,7 +68,7 @@ def get_candidate_tags(
     return tag_ids
 
 
-def get_candidate_photos(
+def get_candidate_photos_ids(
     tag_ids: list[int] | list[list[int]] | None = None,
     logic: Literal["AND", "OR"] = "OR",
 ) -> list[dict]:
@@ -76,7 +82,7 @@ def get_candidate_photos(
         tag_ids = []
 
     images_query = """
-        SELECT DISTINCT i.id, i.description, i.description_embedding
+        SELECT DISTINCT i.id
         FROM images i
     """
 
@@ -90,8 +96,7 @@ def get_candidate_photos(
             WHERE it.tag_id IN ({",".join(["?"] * len(tag_ids))})
         """
         return [
-            dict(row)
-            for row in db.query(images_query, [str(tid) for tid in tag_ids])
+            dict(row) for row in db.query(images_query, [str(tid) for tid in tag_ids])
         ]
 
     if logic == "AND":
@@ -118,29 +123,97 @@ def get_candidate_photos(
     )
 
 
-def rank_photos(
-    description: str, photos: list[dict], limit: int = 5
-) -> list[dict]:
+def rank_photos(description: str, photos_ids: list[int], limit: int = 5) -> dict:
     """Rank candidate photos by cosine similarity to the user description.
 
-    Returns top ``limit`` items with id, description, preview_url, similarity.
+    Always returns a fixed envelope for the UI (not free-form LLM text)::
+
+        {
+          "type": "search_results",
+          "query": "<description used>",
+          "items": [
+            {"id", "description", "preview_url", "similarity"},
+            ...
+          ],
+        }
+
+    ``preview_url`` is ready for ``<img src=...>`` (same path as Library preview).
     """
     vector_target = embedding_model.embed_text(description)
 
     scored: list[dict] = []
-    for photo in photos:
-        blob = photo.get("description_embedding")
+    for photo_id in photos_ids:
+        details = db.select(
+            "images",
+            ["id", "description", "description_embedding"],
+            where={"id": photo_id},
+        )[0]
+        blob = details["description_embedding"]
         if blob is None:
             continue
         vec = np.frombuffer(blob, dtype=np.float32)
         scored.append(
             {
-                "id": photo["id"],
-                "description": photo.get("description") or "",
-                "preview_url": f"/api/pictures/{photo['id']}/preview",
+                "id": details["id"],
+                "description": details["description"],
+                "preview_url": f"/api/pictures/{details['id']}/preview",
                 "similarity": float(np.dot(vec, vector_target)),
             }
         )
 
     scored.sort(key=lambda x: x["similarity"], reverse=True)
-    return scored[:limit]
+    return {
+        "type": SEARCH_RESULTS_TYPE,
+        "query": description,
+        "items": scored[:limit],
+    }
+
+
+def extract_photo_finder_turn(events: Iterable[Any]) -> dict:
+    """Classify one Runner turn for UI: gallery payload vs free-text chat.
+
+    Walk ADK events from ``runner.run_async`` (or collect them first). Prefer the
+    structured tool result over whatever the model says in prose.
+
+    Returns::
+
+        {
+          "kind": "search_results" | "chat",
+          "message": str | None,   # clarify / decline / short caption
+          "results": dict | None,  # fixed schema when kind == search_results
+        }
+
+    UI: if ``kind == "search_results"``, render ``results["items"]`` thumbnails via
+    ``preview_url``; still show ``message`` if present. Otherwise show ``message`` only.
+    """
+    results: dict | None = None
+    message: str | None = None
+
+    for event in events:
+        get_responses = getattr(event, "get_function_responses", None)
+        if callable(get_responses):
+            for fr in get_responses() or []:
+                name = getattr(fr, "name", None)
+                resp = getattr(fr, "response", None)
+                if name != RANK_TOOL_NAME or not isinstance(resp, dict):
+                    continue
+                # Direct tool return, or ADK wrap under "result"
+                if resp.get("type") == SEARCH_RESULTS_TYPE:
+                    results = resp
+                elif isinstance(resp.get("result"), dict) and resp["result"].get(
+                    "type"
+                ) == SEARCH_RESULTS_TYPE:
+                    results = resp["result"]
+
+        is_final = getattr(event, "is_final_response", None)
+        content = getattr(event, "content", None)
+        if callable(is_final) and is_final() and content is not None:
+            for part in getattr(content, "parts", None) or []:
+                text = getattr(part, "text", None)
+                if text:
+                    message = text
+                    break
+
+    if results is not None:
+        return {"kind": SEARCH_RESULTS_TYPE, "message": message, "results": results}
+    return {"kind": "chat", "message": message, "results": None}
