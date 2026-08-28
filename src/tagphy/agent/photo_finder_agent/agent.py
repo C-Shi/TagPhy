@@ -10,8 +10,8 @@ def tool_rank_photos(tool_context: ToolContext) -> dict:
     preview_url, similarity). Call only when you are ready to show matches.
     Do not invent ids or URLs in chat text — the UI reads this tool result.
     """
-    description = tool_context.state["search_query"]
-    tags = tool_context.state["tags"]
+    description = tool_context.state.get("search_query") or ""
+    tags = tool_context.state.get("tags") or []
     tag_ids = get_candidate_tags(tags)
     photos = get_candidate_photos_ids(tag_ids)
     photo_ids = [photo["id"] for photo in photos]
@@ -35,8 +35,11 @@ def system_prompt(context):
         You are a helpful assistant that finds potential photos based on a user's description of the photo.
         If user ask anything else than finding photos, you should politely decline and say you are not able to help with that. Then describe what you can do instead
         User may include other information that is no related to the photo, such as greeting message. You should extract the core photo description from the user's description.
-        User may or may not describe the photo clearly. After up to 3 questions to clarify what the target photo looks like if you are unsure about. If you are sure, proceed to the next step.
+        User may or may not describe the photo clearly. Ask question to clarify what the target photo looks like if you are unsure about. If you are sure, proceed to the next step.
         In each turn, you should ONLY call each tool once. If you need to call a tool multiple times, that means you need to interact with
+        You should always have potential tags to look for. If you could not find any potential tags, you should ask the user to provide more information unitl you are able to locate at least one tag.
+
+        When user asks for a photo, you should always start with the following steps:
         You have access to the following tools:
             - get_all_tags: Get all tags from the database
             - tool_rank_photos: Rank photos based on a user's description of the photo

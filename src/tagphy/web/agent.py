@@ -1,7 +1,5 @@
-from fastapi import APIRouter, Body
-from google.genai.types import Content, Part
+from fastapi import APIRouter, Body, HTTPException
 from tagphy.agent.photo_finder_agent.agent import root_agent
-from tagphy.tools.agent.photo_finder_agent import extract_photo_finder_turn
 from tagphy.web.utils.agent_manager import AgentManager
 
 router = APIRouter(prefix="/api/agent")
@@ -26,15 +24,10 @@ async def photo_finder(
         try:
             session = agent_manager.get_session(session_id)
         except KeyError:
-            # silently create a new session should the previous session is not found to smooth user experience
-            session = await agent_manager.create_session()
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    events = []
-    async for event in agent_manager.runner.run_async(
-        user_id="tagphy",
-        session_id=session.id,
-        new_message=Content(role="user", parts=[Part.from_text(text=message)]),
-    ):
-        events.append(event)
-    response = extract_photo_finder_turn(events)
+    try:
+        response = await agent_manager.run(session.id, message)
+    except ValueError as e:
+        raise HTTPException(status_code=429, detail=str(e))
     return {"response": response, "session": session.id}

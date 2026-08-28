@@ -223,6 +223,29 @@ class TestRankPhotos:
 
         assert [r["id"] for r in result["items"]] == [2]
 
+    def test_skips_missing_photo_row(self):
+        mock_embed = MagicMock()
+        mock_embed.embed_text.return_value = np.array([1.0, 0.0], dtype=np.float32)
+        mock_db = MagicMock()
+        mock_db.select.side_effect = [
+            [],
+            [
+                {
+                    "id": 2,
+                    "description": "exists",
+                    "description_embedding": _vec(1.0, 0.0),
+                }
+            ],
+        ]
+
+        with (
+            patch.object(pfa, "embedding_model", mock_embed),
+            patch.object(pfa, "db", mock_db),
+        ):
+            result = pfa.rank_photos("x", [999, 2])
+
+        assert [r["id"] for r in result["items"]] == [2]
+
 
 class TestExtractPhotoFinderTurn:
     def test_search_results_kind_from_rank_tool(self):

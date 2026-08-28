@@ -147,16 +147,19 @@ def rank_photos(description: str, photos_ids: list[int], limit: int = 5) -> dict
             "images",
             ["id", "description", "description_embedding"],
             where={"id": photo_id},
-        )[0]
-        blob = details["description_embedding"]
+        )
+        if not details:
+            continue
+        row = details[0]
+        blob = row["description_embedding"]
         if blob is None:
             continue
         vec = np.frombuffer(blob, dtype=np.float32)
         scored.append(
             {
-                "id": details["id"],
-                "description": details["description"],
-                "preview_url": f"/api/pictures/{details['id']}/preview",
+                "id": row["id"],
+                "description": row["description"],
+                "preview_url": f"/api/pictures/{row['id']}/preview",
                 "similarity": float(np.dot(vec, vector_target)),
             }
         )
