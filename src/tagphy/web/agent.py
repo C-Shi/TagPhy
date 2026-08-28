@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Body, HTTPException
-from tagphy.agent.photo_finder_agent.agent import root_agent
+from tagphy.agent import AgentFactory
 from tagphy.web.utils.agent_manager import AgentManager
 
 router = APIRouter(prefix="/api/agent")
 
-agent_manager = AgentManager(root_agent)
+photo_finder_agent = AgentFactory.create_agent(
+    agent_type="photo_finder_agent", model="gemini-3.7-flash"
+)
+
+agent_manager = AgentManager(photo_finder_agent)
 
 
 @router.post("/photo-finder")

@@ -76,14 +76,18 @@ def system_prompt(context):
     """
 
 
-root_agent = Agent(
-    model="gemini-3.5-flash",
-    name="photo_finder_agent",
-    description="An agent that finds potential photos based on a user's description of the photo",
-    instruction=system_prompt,
-    tools=[
-        get_all_tags,
-        tool_rank_photos,
-        tool_update_search_context,
-    ],
-)
+def create_photo_finder_agent(model: str) -> Agent:
+    return Agent(
+        model=model,
+        name="photo_finder_agent",
+        description="An agent that finds potential photos based on a user's description of the photo",
+        instruction=system_prompt,
+        tools=[
+            get_all_tags,
+            tool_rank_photos,
+            tool_update_search_context,
+        ],
+    )
+
+
+root_agent = create_photo_finder_agent(model="gemini-3.7-flash")
