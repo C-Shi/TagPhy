@@ -1,8 +1,7 @@
 import { useState } from "react"
-import { NavLink, Outlet } from "react-router-dom"
+import { NavLink, Outlet, useLocation } from "react-router-dom"
+import { AgentSessionProvider } from "./agent/AgentSessionContext"
 import { ScanLockContext } from "./ScanLockContext"
-
-const upcoming = ["Agent"] as const
 
 function navClass(isActive: boolean) {
   return [
@@ -15,9 +14,12 @@ function navClass(isActive: boolean) {
 
 export function AppShell() {
   const [scanLocked, setScanLocked] = useState(false)
+  const location = useLocation()
+  const agentActive = location.pathname.startsWith("/agent")
 
   return (
     <ScanLockContext.Provider value={{ scanLocked, setScanLocked }}>
+      <AgentSessionProvider>
       <div className="flex h-full min-h-0 flex-col bg-canvas text-ink">
         <header className="shrink-0 bg-header text-on-accent">
           <div className="flex h-14 items-center gap-6 px-4 library:px-8">
@@ -50,19 +52,12 @@ export function AppShell() {
               >
                 Settings
               </NavLink>
-              {upcoming.map((label) => (
-                <span
-                  key={label}
-                  title="Coming soon"
-                  className="inline-flex cursor-not-allowed items-center gap-1.5 rounded px-3 py-1.5 text-header-muted/70"
-                  aria-disabled="true"
-                >
-                  {label}
-                  <span className="rounded bg-label-orange px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-on-chip">
-                    Soon
-                  </span>
-                </span>
-              ))}
+              <NavLink
+                to="/agent"
+                className={() => navClass(agentActive)}
+              >
+                Agent
+              </NavLink>
             </nav>
           </div>
           <div className="flex h-9 items-center border-t border-white/10 bg-black/20 px-4 text-sm text-header-muted library:px-8">
@@ -80,6 +75,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      </AgentSessionProvider>
     </ScanLockContext.Provider>
   )
 }
