@@ -28,9 +28,11 @@ metadata → (if privacy_pre_check) NSFW ONNX
          → blocked/fail: failure_log, skip file
 ```
 
-## Stage Seven: Agent system (ADK) — **next / only remaining track**
+## Stage Seven: Agent system (ADK) — **active track**
 
 Living design for the Catalog Assistant and specialists. Challenge it when implementation starts. Former `.cursor/rules/agent-planning.mdc` content lives here.
+
+**Current position:** Photo Finder specialist shipped (see completed slice + stories A–C below).
 
 ### Boundaries
 
@@ -71,13 +73,210 @@ _(Earlier “Catalog Assistant” one-liner — search, explain `Unknown`, merge
 
 ### Development sequence
 
-1. Non-agent baseline finished ← **here now**.
-2. SQLite catalog queries, description search, thumbnail retrieval, structured tool return values.
-3. **Interactive Photo Finder** (first conversational specialist) + ADK basics (`FunctionTool`, session state, Runner, `adk web`; reintroduce `agents/` as needed).
-4. Image embeddings, reference-image records, confidence thresholds, correction-driven profile recalibration.
-5. **Entity Onboarding**; wire confirmed profiles into future scans.
-6. **Catalog Concierge** once multiple specialists exist; route through it.
-7. **Duplicate Resolver** after hash/embedding similarity and safe archive exist.
+1. Non-agent baseline finished ← **done**.
+2. SQLite catalog queries, description search, thumbnail retrieval, structured tool return values ← **done**.
+3. **Interactive Photo Finder** (first conversational specialist) + ADK basics (`FunctionTool`, session state, Runner, HTTP API, chat UI) ← **done** (Aug 2026).
+4. **Gallery & catalog UX** + **persistent agent sessions** + **preview pagination** ← **next** (stories A–D below).
+5. Image embeddings, reference-image records, confidence thresholds, correction-driven profile recalibration.
+6. **Entity Onboarding**; wire confirmed profiles into future scans.
+7. **Catalog Concierge** once multiple specialists exist; route through it.
+8. **Duplicate Resolver** after hash/embedding similarity and safe archive exist.
+
+### Stage Seven — completed slice (Photo Finder)
+
+| Deliverable                                                                                       | Status   |
+| ------------------------------------------------------------------------------------------------- | -------- |
+| ADK Photo Finder agent + tools (`get_all_tags`, `tool_update_search_context`, `tool_rank_photos`) | **Done** |
+| Turn contract for UI (`chat` vs `search_results`, `preview_url`)                                  | **Done** |
+| `POST /api/agent/photo-finder` + `AgentManager` (rate limits, session cap)                        | **Done** |
+| `AgentFactory` (multi-agent / model hook)                                                         | **Done** |
+| FE `/agent` + `/agent/:sessionId` chat UI (sidebar, bubbles, search-result thumbnails)            | **Done** |
+| In-memory FE session list (survives in-app nav via context; lost on refresh)                      | **Done** |
+
+### Stage Seven — next stories (board order)
+
+Implement in order **A → B → C → D**. A and B are catalog UX (non-agent). C is agent persistence. D hardens gallery pagination on Library and tag pages (can follow B once gallery exists).
+
+---
+
+#### Story A — Picture detail page
+
+**Goal:** Click a photo in Library (or elsewhere) and open a dedicated detail view with full metadata and tags.
+
+**Route (FE):** `/pictures/:pictureId`.
+
+**Entry points:**
+
+- Library `Preview` / `PreviewItem` — thumbnail click navigates to detail route.
+- Future: Agent search-result thumbnails (optional in same story or follow-up).
+
+**Backend (new):**
+
+- `GET /api/pictures/{picture_id}` — single picture detail JSON.
+- Reuse existing `GET /api/pictures/{picture_id}/preview` for thumbnail/full preview in UI (larger `<img>`; same endpoint is fine for MVP).
+
+**Response shape (suggested):**
+
+```json
+{
+  "id": 1,
+  "file_name": "...",
+  "file_path": "...",
+  "year": "...",
+  "location": "...",
+  "description": "...",
+  "created_at": "...",
+  "updated_at": "...",
+  "tags": [{ "id": 1, "name": "...", "source": "vision" | "metadata" }]
+}
+```
+
+- Implement via `PictureHelper` (and/or tag join query). **404** if picture missing.
+- **DB:** `tagphy.db` only (catalog).
+
+**Frontend (new):**
+
+- `PictureDetailPage` — full-width preview, metadata fields, tag list (links to `/tags/:tagId/pictures`).
+- Register route in `App.tsx`.
+- Wire Library preview grid to navigate on click.
+
+**Out of scope:** Edit tags, re-run vision, full-resolution original file endpoint (preview JPEG is enough for MVP).
+
+**Acceptance:**
+
+- [ ] Click photo in Library → detail page loads with correct id.
+- [ ] Shows preview, file name, year, location, description.
+- [ ] Lists all tags on that image; tag links open tag gallery (Story B).
+- [ ] Invalid id shows error state.
+
+---
+
+#### Story B — Tag pictures gallery (fill `/tags/:tagId/pictures`)
+
+**Goal:** Replace “Coming soon” on tag detail with a real photo grid.
+
+**Route (FE):** `/tags/:tagId/pictures` — already exists (`TagPicturesPage`).
+
+**Backend:** Mostly **done**. `GET /api/tags/{tag_id}/pictures` already returns tag metadata + `pictures[]` using descendant tags (children + self, OR logic). Verify/fix if descendant set should match Library CTE behavior exactly.
+
+**Frontend:**
+
+- Reuse `Preview` + `PreviewItem` (or shared gallery subcomponent) with `tag.pictures` from existing API.
+- Pagination UI can be minimal for Story B (all results OK for tiny catalogs); **Story D** adds proper paged tag gallery aligned with Library.
+- Thumbnail click → Story A detail route.
+
+**Out of scope:** Tag editing, merge, filter AND within tag page.
+
+**Acceptance:**
+
+- [ ] Open tag from Library tag name link → gallery shows all photos tagged with that tag **or any descendant tag**.
+- [ ] Empty tag shows empty state (not “Coming soon”).
+- [ ] Click thumbnail → picture detail (Story A).
+
+---
+
+#### Story C — Persistent agent sessions (`agent.db` + DatabaseSessionService)
+
+**Goal:** Agent sessions and ADK state survive backend restart; FE loads session list and message history from server instead of memory-only context.
+
+**Database layout:**
+
+```text
+tagphy.db   → catalog, settings, failure_log (unchanged; SQLiteConnection)
+agent.db    → all agent-related storage (new file beside app on USB)
+```
+
+- **Do not** merge ADK DDL into TagPhy SQL migrations — ADK creates its own tables via SQLAlchemy (`sessions`, `events`, `app_states`, `user_states`, `adk_internal_metadata`).
+- Optional **app-owned** tables in `agent.db` (same file, your migrations): e.g. `agent_conversations`, `agent_messages` for UI-friendly sidebar/history — if ADK `events` JSON is too heavy to render directly.
+
+**Backend:**
+
+- Add dependency: `google-adk[db]` (SQLAlchemy + async SQLite driver).
+- Replace `InMemorySessionService` in `AgentManager` with `DatabaseSessionService(db_url="sqlite+aiosqlite:///…/agent.db")`.
+- Keep `AgentManager` rate limits / request cap in process memory or move to `agent.db` metadata — document choice.
+- **New API (for FE persistence):**
+  - `GET /api/agent/sessions` — list conversations (id, title, agent_type, updated_at).
+  - `GET /api/agent/sessions/{session_id}/messages` — ordered messages for chat replay.
+  - Existing `POST /api/agent/photo-finder` unchanged; ensure it appends to durable store when UI tables exist.
+- Photo Finder **tools** still read **`tagphy.db`** (catalog) — only session/chat uses **`agent.db`**.
+
+**Frontend:**
+
+- Remove or slim `AgentSessionContext` in-memory session list; fetch sessions on Agent page mount.
+- On `/agent/:sessionId`, load messages from API; send still via `POST /api/agent/photo-finder`.
+- Refresh browser restores sidebar + history when backend session exists.
+
+**Out of scope:** Mid-chat model switch, multi-agent routes, cross-device sync, storing full JPEGs in agent DB.
+
+**Acceptance:**
+
+- [ ] Restart FastAPI — prior agent session can still receive messages with same `session_id` (ADK layer).
+- [ ] Refresh browser — sidebar and chat history restored from API (app layer).
+- [ ] `tagphy.db` tables unchanged; `agent.db` created automatically on first agent use.
+- [ ] Catalog scan/library unaffected.
+
+**Dependencies:** Stories A–B independent of C. C can ship without picture detail links from agent thumbnails.
+
+---
+
+#### Story D — Preview pagination (Library + tag galleries, FE + BE)
+
+**Goal:** Library and tag picture grids scale when the catalog grows — correct page navigation, consistent page size, and API responses that tell the FE whether more pages exist.
+
+**Current gaps (baseline):**
+
+- **BE:** `GET /api/pictures` accepts `pagination` and uses `LIMIT`/`OFFSET` (default page size 25 in `PictureHelper`), but returns **only the current page** with **no total count or `has_more`** — FE guesses next page via `pictures.length >= pageSize`.
+- **BE:** `GET /api/tags/{tag_id}/pictures` returns **all** matching images in one response (no `pagination` param).
+- **FE:** `LibraryPage` + `Preview` have prev/next UI; `hasNext` heuristic is fragile on exact page-size boundaries.
+- **FE:** `TagPicturesPage` (Story B) will need the same pagination contract once Story D lands.
+
+**Backend:**
+
+- Standardize paginated list response shape for picture grids, e.g.:
+  ```json
+  {
+    "items": [
+      /* Picture rows */
+    ],
+    "page": 1,
+    "page_size": 25,
+    "total": 842,
+    "has_more": true
+  }
+  ```
+  Or return `total` only and let FE compute `has_more` — pick one; document in `frontend/src/api/types.ts`.
+- **`GET /api/pictures`** — return wrapper with `items` + pagination metadata; keep `pagination` query param (1-based page index); optional `page_size` query param capped (e.g. max 100).
+- **`GET /api/tags/{tag_id}/pictures`** — add `pagination` (+ optional `page_size`); paginate descendant OR query in `PictureHelper` (same as today’s tag set, don’t load all rows).
+- **`PictureHelper.get_pictures_for_tags`** — add count query (or `COUNT(*) OVER()` ) for `total`; ensure SELECT columns match FE `Picture` type (`year`, `location`, etc. if displayed).
+- **DB:** `tagphy.db` only.
+
+**Frontend:**
+
+- Update `fetchPictures` / `fetchTagPictures` (or split tag pictures fetch) to consume paginated response.
+- **`Preview` component** — drive prev/next from `has_more` and/or `total` + `page` (not length heuristic alone); reset to page 1 when tag filters change (Library already does).
+- **`LibraryPage`** — wire new response shape.
+- **`TagPicturesPage`** — same `Preview` pagination after Story B.
+- Show “Page X of Y” or “Page X” + disabled next when `!has_more`.
+
+**Out of scope:** Infinite scroll, cursor-based pagination, configurable page size in Settings UI.
+
+**Acceptance:**
+
+- [ ] Library with >25 photos: page 1 shows 25; next page shows next batch; previous returns; last page disables next.
+- [ ] Tag gallery with >25 descendant-tagged photos: same behavior via tag endpoint.
+- [ ] Empty result: page 1 empty state, no erroneous “next”.
+- [ ] Filter change (Library tag AND) resets to page 1.
+- [ ] API docs / types reflect pagination contract.
+
+**Dependencies:** Best after **Story B** (tag gallery using `Preview`). Can ship in parallel with **Story C** (orthogonal).
+
+---
+
+### Agent platform notes (carry forward)
+
+- **Model settings** (global default + per-agent override in `tagphy.db` settings) — planned; not part of A–C; do before Concierge or second agent.
+- **Do not** rewrite catalog `SQLiteConnection` to SQLAlchemy; ADK SQLAlchemy is **agent.db only**.
+- Chat transcript in UI is **not** catalog memory; catalog stays in `tagphy.db`.
 
 ## Explicitly out of scope (for now)
 
@@ -93,4 +292,6 @@ Not Trello stories until you reopen them (agent-track items above are **in** sco
 ## Status
 
 **Stages One–Six (non-agent): complete for this cut.**  
-**Next: Stage Seven — start at sequence step 2–3 (catalog tool APIs + Interactive Photo Finder / ADK).**
+**Stage Seven — Photo Finder vertical slice: complete** (agent + API + FE chat harness).  
+**Next on board: Story A (picture detail) → Story B (tag gallery) → Story C (agent.db + persistent sessions) → Story D (preview pagination).**  
+Then continue sequence step 5 (embeddings / Entity Onboarding prep).
