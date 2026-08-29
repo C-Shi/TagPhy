@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tagphy.tools.db_operations import PictureHelper
+from tagphy.tools.db_operations import PictureHelper, RecordNotFoundError
 
 TAG_A = 1
 TAG_B = 2
@@ -162,3 +162,27 @@ class TestGetPicturesForTags:
             helper.get_pictures_for_tags(tag_ids=[TAG_A], logic="Other")
 
         db.query.assert_not_called()
+
+
+class TestGetPicture:
+    def test_success_returns_picture(self):
+        db = MagicMock()
+        db.select.return_value = [P1]
+        helper = PictureHelper(db=db)
+
+        result = helper.get_picture(101)
+
+        assert result == P1
+        db.select.assert_called_once_with("images", ["*"], {"id": 101})
+
+    def test_failure_wraps_message(self):
+        db = MagicMock()
+        db.select.side_effect = RecordNotFoundError("images")
+        helper = PictureHelper(db=db)
+
+        with pytest.raises(
+            RecordNotFoundError, match="Record not found in table: images"
+        ) as exc:
+            helper.get_picture(999)
+
+        assert "Record not found in table: images" in str(exc.value)

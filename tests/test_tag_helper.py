@@ -113,3 +113,14 @@ class TestGetTagPictures:
 
         with pytest.raises(ValueError, match="Bad Request: Invalid Tag"):
             helper.get_tag_pictures(999)
+
+
+class TestGetTagsForPicture:
+    def test_valid_picture_id_returns_tag_response(self):
+        db = MagicMock()
+        db.query.return_value = [{"id": 1, "name": "Cat"}]
+        helper = TagHelper(db=db)
+
+        result = helper.get_tags_for_picture(101)
+
+        assert result == [{"id": 1, "name": "Cat"}]
