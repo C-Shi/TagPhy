@@ -1,4 +1,5 @@
 from typing import Any
+from . import RecordNotFoundError
 
 
 class TagHelper:
@@ -104,3 +105,19 @@ class TagHelper:
         tag_pictures_response["parents"] = [dict(parent) for parent in parents]
 
         return tag_pictures_response
+
+    def get_tags_for_picture(self, picture_id: int) -> list[dict]:
+        """Get tag for a picture."""
+
+        if not picture_id or not isinstance(picture_id, int) or picture_id <= 0:
+            raise ValueError("Bad Request: Invalid Picture")
+
+        # get tag info
+        try:
+            tag_info = self.db.query(
+                "SELECT t.id, t.name FROM tags t JOIN image_tags it ON t.id = it.tag_id WHERE it.image_id = ?",
+                (picture_id,),
+            )
+            return tag_info
+        except Exception as e:
+            raise RecordNotFoundError("tags")

@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from typing import Annotated, Any
 from tagphy.db import SQLiteConnection
 from tagphy.web.utils import SettingsStore, BrowseHelper
-from tagphy.tools.db_operations import TagHelper, PictureHelper
+from tagphy.tools.db_operations import RecordNotFoundError, TagHelper, PictureHelper
 from tagphy.tools import ScanJobController, BusyError, ImageProcessingPipeline
 
 router = APIRouter(prefix="/api")
@@ -56,6 +56,26 @@ async def get_pictures(
             page=pagination, tag_ids=selected_tag_ids
         )
         return pictures
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/pictures/{picture_id}")
+async def get_picture(picture_id: int):
+    try:
+        # get picture info
+        picture = picture_helper.get_picture(picture_id)
+        # remove unrelated or unserializable fields to match UI
+        picture.pop("description_embedding", None)
+        picture.pop("created_at", None)
+        picture.pop("updated_at", None)
+
+        # get picture tags
+        tags = tag_helper.get_tags_for_picture(picture_id)
+        picture["tags"] = tags
+        return picture
+    except RecordNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

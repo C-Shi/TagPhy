@@ -4,6 +4,7 @@ from typing import Any
 
 from PIL import Image
 from pillow_heif import register_heif_opener
+from . import RecordNotFoundError
 
 from tagphy import app_root
 
@@ -109,3 +110,10 @@ class PictureHelper:
             return (buffer.getvalue(), alt)
         except Exception as e:
             raise Exception(f"Failed to get picture preview: {e}")
+
+    def get_picture(self, picture_id: int) -> dict:
+        try:
+            picture = dict(self.db.select("images", ["*"], {"id": picture_id})[0])
+            return picture
+        except:
+            raise RecordNotFoundError("images")
