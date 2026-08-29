@@ -90,7 +90,9 @@ class PictureHelper:
                 raise ValueError(str(e))
             raise ValueError(f"Invalid Tags")
 
-    def get_picture_preview(self, picture_id: int) -> tuple[bytes, str]:
+    def get_picture_preview(
+        self, picture_id: int, preview_size: int = 320
+    ) -> tuple[bytes, str]:
 
         try:
             picture = self.db.select(
@@ -101,7 +103,7 @@ class PictureHelper:
 
             with Image.open(image_path) as img:
                 rgb = img.convert("RGB")
-                rgb.thumbnail((320, 320))
+                rgb.thumbnail((preview_size, preview_size))
 
                 # create a byte buffer to store the image
                 buffer = io.BytesIO()

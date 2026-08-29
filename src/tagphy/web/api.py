@@ -81,9 +81,12 @@ async def get_picture(picture_id: int):
 
 
 @router.get("/pictures/{picture_id}/preview")
-async def get_picture_preview(picture_id: int):
+async def get_picture_preview(picture_id: int, size: int | None = None):
     try:
-        preview = picture_helper.get_picture_preview(picture_id)
+        if size:
+            preview = picture_helper.get_picture_preview(picture_id, size)
+        else:
+            preview = picture_helper.get_picture_preview(picture_id)
         return Response(
             content=preview[0], media_type="image/jpeg", headers={"Alt": preview[1]}
         )
