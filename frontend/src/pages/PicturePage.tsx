@@ -45,38 +45,100 @@ export function PicturePage() {
   }
 
   return (
-    <>
-      <figure className="w-40 shrink-0 overflow-hidden rounded-md border border-line bg-surface">
-        <Link to={`/pictures/${picture.id}`}>
-          <img
-            src={`/api/pictures/${picture.id}/preview?size=1280`}
-            alt={picture.file_name}
-            loading="lazy"
-            width={1280}
-            height={1280}
-            className="block h-40 w-40 object-cover"
-          />
-          <figcaption className="truncate px-2 py-1.5 text-xs text-ink-muted">
-            {picture.file_name}
-          </figcaption>
+    <div className="w-full px-4 py-6 library:px-8">
+      <div className="mx-auto w-full max-w-3xl animate-fade-up">
+        <Link
+          to="/library"
+          className="inline-flex items-center gap-1.5 text-base font-medium text-ink-muted transition-colors hover:text-accent"
+        >
+          <span aria-hidden>←</span>
+          Library
         </Link>
-      </figure>
-      <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">{picture.file_name}</h1>
-        <p className="text-sm text-ink-muted">{picture.description}</p>
-      </div>
 
-      <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Tags</h2>
-        <ul className="flex flex-wrap gap-2">
-          {picture.tags.map((tag) => (
-            <li key={tag.id}>
-              <Link to={`/tags/${tag.id}/pictures`}>{tag.name}</Link>
-            </li>
-          ))}
-        </ul>
+        <article className="mt-5 overflow-hidden rounded-xl border border-line/80 bg-surface shadow-[0_1px_2px_rgba(42,31,26,0.04),0_12px_28px_-12px_rgba(42,31,26,0.18)]">
+          {/* Print stage — dark mat so letterboxing feels intentional */}
+          <figure className="relative bg-header px-3 py-3 library:px-5 library:py-5">
+            <div className="overflow-hidden rounded-md bg-header ring-1 ring-white/10">
+              <img
+                src={`/api/pictures/${picture.id}/preview?size=1280`}
+                alt={picture.file_name}
+                className="mx-auto block max-h-[min(62vh,34rem)] w-full object-contain"
+              />
+            </div>
+          </figure>
+
+          {/* Caption sheet */}
+          <div className="px-5 py-6 library:px-8 library:py-7">
+            <header>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                Photo
+              </p>
+              <h1 className="mt-1.5 break-words text-[1.85rem] font-semibold leading-tight tracking-tight text-ink library:text-[2.05rem]">
+                {picture.file_name}
+              </h1>
+              {picture.description ? (
+                <p className="mt-3 max-w-prose text-lg leading-[1.65] text-ink-muted">
+                  {picture.description}
+                </p>
+              ) : null}
+            </header>
+
+            {(picture.year || picture.location) && (
+              <dl className="mt-6 grid gap-4 border-t border-line/70 pt-5 sm:grid-cols-2">
+                {picture.year ? (
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                      Year
+                    </dt>
+                    <dd className="mt-1 text-lg font-medium text-ink">
+                      {picture.year}
+                    </dd>
+                  </div>
+                ) : null}
+                {picture.location ? (
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                      Location
+                    </dt>
+                    <dd className="mt-1 text-lg font-medium text-ink">
+                      {picture.location}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            )}
+
+            <section className="mt-6 border-t border-line/70 pt-5">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                Tags
+                {picture.tags.length > 0 ? (
+                  <span className="ml-2 font-medium normal-case tracking-normal text-ink-muted/80">
+                    {picture.tags.length}
+                  </span>
+                ) : null}
+              </h2>
+
+              {picture.tags.length === 0 ? (
+                <p className="mt-3 text-base text-ink-muted">No tags yet</p>
+              ) : (
+                <ul className="mt-3.5 flex flex-wrap gap-x-1 gap-y-2">
+                  {picture.tags.map((tag) => (
+                    <li key={tag.id}>
+                      <Link
+                        to={`/tags/${tag.id}/pictures`}
+                        className="inline-block rounded-md px-2.5 py-1 text-base text-accent transition-colors hover:bg-accent-soft"
+                      >
+                        {tag.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </article>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -88,8 +150,8 @@ function LoadingView() {
           <div className="absolute inset-0 rounded-full border-[3px] border-accent/15" />
           <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-accent border-r-accent/40" />
         </div>
-        <p className="mt-7 text-xl font-medium text-ink">Loading photo…</p>
-        <p className="mt-2 text-base leading-snug text-ink-muted">
+        <p className="mt-7 text-2xl font-medium text-ink">Loading photo…</p>
+        <p className="mt-2 text-lg leading-snug text-ink-muted">
           Digging through the pile.
           <br />
           Hang tight.
@@ -103,16 +165,16 @@ function ErrorView({ message }: { message: string }) {
   return (
     <div className="w-full px-4 py-6 library:px-8">
       <div className="mx-auto max-w-lg">
-        <h1 className="text-2xl font-semibold text-ink">Couldn&apos;t load photo.</h1>
-        <div className="mt-4 rounded-md border border-label-orange/40 bg-surface px-3 py-2 text-base">
+        <h1 className="text-3xl font-semibold text-ink">Couldn&apos;t load photo.</h1>
+        <div className="mt-4 rounded-md border border-label-orange/40 bg-surface px-3 py-2 text-lg">
           <span className="font-medium text-label-orange">
             Something went wrong.
           </span>
-          <div className="mt-1 font-mono text-sm text-ink-muted">{message}</div>
+          <div className="mt-1 font-mono text-base text-ink-muted">{message}</div>
         </div>
         <Link
           to="/library"
-          className="mt-6 inline-flex items-center rounded bg-accent px-3 py-1.5 text-base font-medium text-on-accent hover:brightness-110"
+          className="mt-6 inline-flex items-center rounded bg-accent px-3 py-1.5 text-lg font-medium text-on-accent hover:brightness-110"
         >
           ← Library
         </Link>
