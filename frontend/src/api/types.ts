@@ -47,8 +47,10 @@ export type Picture = {
   year: string
   location: string
   description: string
-  created_at: string
-  updated_at: string
+}
+
+export type PictureDetail = Picture & {
+  tags: TagRef[]
 }
 
 /** idle | running | stopping — matches ScanJobController. */

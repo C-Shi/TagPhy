@@ -1,4 +1,4 @@
-import type { Picture, SettingsMap, TagResponse, TagPictureResponse } from './types'
+import type { Picture, SettingsMap, TagResponse, TagPictureResponse, PictureDetail } from './types'
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -41,6 +41,11 @@ export async function fetchPictures(
   const res = await fetch(`/api/pictures?${search.toString()}`)
   const data = await parseJson<Picture[]>(res)
   return data || []
+}
+
+export async function fetchPictureDetail(id: number): Promise<PictureDetail> {
+  const res = await fetch(`/api/pictures/${id}`)
+  return parseJson<PictureDetail>(res)
 }
 
 export async function fetchSettings(): Promise<SettingsMap> {

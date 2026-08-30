@@ -5,6 +5,7 @@ import { LibraryPage } from "./pages/LibraryPage";
 import { ScanPage } from "./pages/ScanPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TagPicturesPage } from "./pages/TagPicturesPage";
+import { PicturePage } from "./pages/PicturePage";
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/agent/:sessionId?" element={<AgentPage />} />
         <Route path="/tags/:tagId/pictures" element={<TagPicturesPage />} />
+        <Route path="/pictures/:pictureId" element={<PicturePage />} />
         <Route path="*" element={<Navigate to="/library" replace />} />
       </Route>
     </Routes>

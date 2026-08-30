@@ -136,7 +136,7 @@ Implement in order **A → B → C → D**. A and B are catalog UX (non-agent). 
 
 **Frontend (new):**
 
-- `PictureDetailPage` — full-width preview, metadata fields, tag list (links to `/tags/:tagId/pictures`).
+- `PicturePage` — full-width preview, metadata fields, tag list (links to `/tags/:tagId/pictures`).
 - Register route in `App.tsx`.
 - Wire Library preview grid to navigate on click.
 
@@ -144,10 +144,10 @@ Implement in order **A → B → C → D**. A and B are catalog UX (non-agent). 
 
 **Acceptance:**
 
-- [ ] Click photo in Library → detail page loads with correct id.
-- [ ] Shows preview, file name, year, location, description.
-- [ ] Lists all tags on that image; tag links open tag gallery (Story B).
-- [ ] Invalid id shows error state.
+- [x] Click photo in Library → detail page loads with correct id.
+- [x] Shows preview, file name, year, location, description.
+- [x] Lists all tags on that image; tag links open tag gallery (Story B).
+- [x] Invalid id shows error state.
 
 ---
 
