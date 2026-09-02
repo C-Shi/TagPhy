@@ -56,7 +56,7 @@ export type PictureDetail = Picture & {
 /** idle | running | stopping — matches ScanJobController. */
 export type ScanJobStatus = "idle" | "running" | "stopping"
 
-/** Body for POST /api/scan, POST /api/scan_stop, GET /api/scan/status. */
+/** Body for POST /api/scan, POST /api/scan/stop, GET /api/scan/status. */
 export type ScanStatusResponse = {
   status: ScanJobStatus
   message?: string

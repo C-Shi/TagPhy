@@ -1,12 +1,12 @@
-import type { AgentSession } from '../../api/agent'
-import { SessionListItem } from './SessionListItem'
+import type { AgentSession } from "../../api/agents";
+import { SessionListItem } from "./SessionListItem";
 
 type Props = {
-  sessions: AgentSession[]
-  activeSessionId: string | undefined
-  onNewChat: () => void
-  onSelectSession: (sessionId: string) => void
-}
+  sessions: AgentSession[];
+  activeSessionId: string | undefined;
+  onNewChat: () => void;
+  onSelectSession: (sessionId: string) => void;
+};
 
 export function SessionList({
   sessions,
@@ -14,7 +14,7 @@ export function SessionList({
   onNewChat,
   onSelectSession,
 }: Props) {
-  const sorted = [...sessions].sort((a, b) => b.createdAt - a.createdAt)
+  const sorted = [...sessions].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
     <aside className="flex min-w-0 shrink-0 flex-col border-b border-line bg-panel library:h-full library:w-56 library:border-b-0 library:border-r">
@@ -51,5 +51,5 @@ export function SessionList({
         )}
       </div>
     </aside>
-  )
+  );
 }

@@ -88,7 +88,7 @@ _(Earlier “Catalog Assistant” one-liner — search, explain `Unknown`, merge
 | ------------------------------------------------------------------------------------------------- | -------- |
 | ADK Photo Finder agent + tools (`get_all_tags`, `tool_update_search_context`, `tool_rank_photos`) | **Done** |
 | Turn contract for UI (`chat` vs `search_results`, `preview_url`)                                  | **Done** |
-| `POST /api/agent/photo-finder` + `AgentManager` (rate limits, session cap)                        | **Done** |
+| `POST /api/agents/photo-finder` + `AgentManager` (rate limits, session cap)                       | **Done** |
 | `AgentFactory` (multi-agent / model hook)                                                         | **Done** |
 | FE `/agent` + `/agent/:sessionId` chat UI (sidebar, bubbles, search-result thumbnails)            | **Done** |
 | In-memory FE session list (survives in-app nav via context; lost on refresh)                      | **Done** |
@@ -195,15 +195,15 @@ agent.db    → all agent-related storage (new file beside app on USB)
 - Replace `InMemorySessionService` in `AgentManager` with `DatabaseSessionService(db_url="sqlite+aiosqlite:///…/agent.db")`.
 - Keep `AgentManager` rate limits / request cap in process memory or move to `agent.db` metadata — document choice.
 - **New API (for FE persistence):**
-  - `GET /api/agent/sessions` — list conversations (id, title, agent_type, updated_at).
-  - `GET /api/agent/sessions/{session_id}/messages` — ordered messages for chat replay.
-  - Existing `POST /api/agent/photo-finder` unchanged; ensure it appends to durable store when UI tables exist.
+  - `GET /api/agents/sessions` — list conversations (id, title, agent_type, updated_at).
+  - `GET /api/agents/sessions/{session_id}/messages` — ordered messages for chat replay.
+  - Existing `POST /api/agents/photo-finder` unchanged; ensure it appends to durable store when UI tables exist.
 - Photo Finder **tools** still read **`tagphy.db`** (catalog) — only session/chat uses **`agent.db`**.
 
 **Frontend:**
 
 - Remove or slim `AgentSessionContext` in-memory session list; fetch sessions on Agent page mount.
-- On `/agent/:sessionId`, load messages from API; send still via `POST /api/agent/photo-finder`.
+- On `/agent/:sessionId`, load messages from API; send still via `POST /api/agents/photo-finder`.
 - Refresh browser restores sidebar + history when backend session exists.
 
 **Out of scope:** Mid-chat model switch, multi-agent routes, cross-device sync, storing full JPEGs in agent DB.

@@ -23,11 +23,11 @@ export async function startScan(path: string): Promise<ScanStatusResponse> {
 }
 
 /**
- * POST /api/scan_stop
+ * POST /api/scan/stop
  * success body: { status: "idle"|"stopping" }
  */
 export async function stopScan(): Promise<ScanStatusResponse> {
-  const response = await fetch("/api/scan_stop", { method: "POST" })
+  const response = await fetch("/api/scan/stop", { method: "POST" })
   return parseScanStatusResponse(response)
 }
 

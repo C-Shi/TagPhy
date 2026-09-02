@@ -1,11 +1,11 @@
-import type { AgentSearchItem } from '../../api/agent'
+import type { AgentSearchItem } from "../../api/agents";
 
 type Props = {
-  items: AgentSearchItem[]
-}
+  items: AgentSearchItem[];
+};
 
 export function SearchResultsGrid({ items }: Props) {
-  if (items.length === 0) return null
+  if (items.length === 0) return null;
 
   return (
     <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
@@ -31,5 +31,5 @@ export function SearchResultsGrid({ items }: Props) {
         </figure>
       ))}
     </div>
-  )
+  );
 }

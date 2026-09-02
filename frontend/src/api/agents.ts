@@ -48,12 +48,12 @@ async function parseAgentError(res: Response): Promise<never> {
   )
 }
 
-/** POST /api/agent/photo-finder */
+/** POST /api/agents/photo-finder */
 export async function sendPhotoFinderMessage(
   message: string,
   sessionId?: string,
 ): Promise<PhotoFinderResponse> {
-  const res = await fetch('/api/agent/photo-finder', {
+  const res = await fetch('/api/agents/photo-finder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

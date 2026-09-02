@@ -9,7 +9,10 @@ import pytest
 from fastapi import HTTPException
 
 from tagphy.tools.db_operations import RecordNotFoundError
-from tagphy.web import api
+from tagphy.web.routes import tags as tag_api
+from tagphy.web.routes import pictures as picture_api
+from tagphy.web.routes import scan as scan_api
+from tagphy.web.routes import settings as settings_api
 
 
 def _run(coro):
@@ -31,8 +34,8 @@ class TestTagsRoute:
         ]
         mock_helper.get_tags_with_details.return_value = sample
 
-        with patch.object(api, "tag_helper", mock_helper):
-            result = _run(api.tag_info())
+        with patch.object(tag_api, "tag_helper", mock_helper):
+            result = _run(tag_api.tag_info())
 
         mock_helper.get_tags_with_details.assert_called_once_with()
         assert result == sample
@@ -50,10 +53,10 @@ class TestPictureRoute:
         mock_helper.get_picture.return_value = image_sample
         mock_helper.get_tags_for_picture.return_value = tag_sample
         with (
-            patch.object(api, "picture_helper", mock_helper),
-            patch.object(api, "tag_helper", mock_helper),
+            patch.object(picture_api, "picture_helper", mock_helper),
+            patch.object(picture_api, "tag_helper", mock_helper),
         ):
-            result = _run(api.get_picture(101))
+            result = _run(picture_api.get_picture(101))
 
         mock_helper.get_picture.assert_called_once_with(101)
         mock_helper.get_tags_for_picture.assert_called_once_with(101)
@@ -64,11 +67,11 @@ class TestPictureRoute:
         mock_helper.get_picture.side_effect = RecordNotFoundError("images")
 
         with (
-            patch.object(api, "picture_helper", mock_helper),
-            patch.object(api, "tag_helper", mock_helper),
+            patch.object(picture_api, "picture_helper", mock_helper),
+            patch.object(picture_api, "tag_helper", mock_helper),
         ):
             with pytest.raises(HTTPException) as exc_info:
-                _run(api.get_picture(101))
+                _run(picture_api.get_picture(101))
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Record not found in table: images"
@@ -87,8 +90,8 @@ class TestTagPicturesRoute:
         }
         mock_helper.get_tag_pictures.return_value = sample
 
-        with patch.object(api, "tag_helper", mock_helper):
-            result = _run(api.get_tag(7))
+        with patch.object(tag_api, "tag_helper", mock_helper):
+            result = _run(tag_api.get_tag(7))
 
         mock_helper.get_tag_pictures.assert_called_once_with(7)
         assert result == sample
@@ -99,9 +102,9 @@ class TestTagPicturesRoute:
             "Bad Request: Invalid Tag"
         )
 
-        with patch.object(api, "tag_helper", mock_helper):
+        with patch.object(tag_api, "tag_helper", mock_helper):
             with pytest.raises(HTTPException) as exc_info:
-                _run(api.get_tag(999))
+                _run(tag_api.get_tag(999))
 
         mock_helper.get_tag_pictures.assert_called_once_with(999)
         assert exc_info.value.status_code == 400
@@ -112,23 +115,25 @@ class TestSettingsRoute:
     def test_get_settings_returns_store_map(self):
         mock_store = MagicMock()
         mock_store.load.return_value = {"privacy_pre_check": "true"}
-        with patch.object(api, "settings_store", mock_store):
-            result = _run(api.get_settings())
+        with patch.object(settings_api, "settings_store", mock_store):
+            result = _run(settings_api.get_settings())
         mock_store.load.assert_called_once_with()
         assert result == {"privacy_pre_check": "true"}
 
     def test_put_setting_calls_set(self):
         mock_store = MagicMock()
         mock_store.set.return_value = {"privacy_pre_check": "false"}
-        with patch.object(api, "settings_store", mock_store):
-            result = _run(api.update_setting("privacy_pre_check", {"value": "false"}))
+        with patch.object(settings_api, "settings_store", mock_store):
+            result = _run(
+                settings_api.update_setting("privacy_pre_check", {"value": "false"})
+            )
         mock_store.set.assert_called_once_with("privacy_pre_check", "false")
         assert result["privacy_pre_check"] == "false"
 
     def test_put_empty_value_raises_http_400(self):
         mock_store = MagicMock()
         mock_store.set.side_effect = ValueError("value must be a non-empty string")
-        with patch.object(api, "settings_store", mock_store):
+        with patch.object(settings_api, "settings_store", mock_store):
             with pytest.raises(HTTPException) as exc_info:
-                _run(api.update_setting("privacy_pre_check", {"value": ""}))
+                _run(settings_api.update_setting("privacy_pre_check", {"value": ""}))
         assert exc_info.value.status_code == 400

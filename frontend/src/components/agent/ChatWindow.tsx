@@ -1,47 +1,50 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ChatMessage } from '../../api/agent'
-import { ChatBubble } from './ChatBubble'
+import { useEffect, useRef, useState } from "react";
+import type { ChatMessage } from "../../api/agents";
+import { ChatBubble } from "./ChatBubble";
 
 type Props = {
-  messages: ChatMessage[]
-  loading: boolean
-  onSend: (text: string) => void
-}
+  messages: ChatMessage[];
+  loading: boolean;
+  onSend: (text: string) => void;
+};
 
 function TypingIndicator() {
   return (
     <div className="flex justify-start">
       <div className="rounded-2xl rounded-bl-sm border border-line bg-surface px-3 py-3 sm:px-4">
-        <span className="inline-flex items-center gap-1" aria-label="Agent is typing">
+        <span
+          className="inline-flex items-center gap-1"
+          aria-label="Agent is typing"
+        >
           <span className="h-2 w-2 animate-pulse rounded-full bg-ink-muted [animation-delay:0ms]" />
           <span className="h-2 w-2 animate-pulse rounded-full bg-ink-muted [animation-delay:150ms]" />
           <span className="h-2 w-2 animate-pulse rounded-full bg-ink-muted [animation-delay:300ms]" />
         </span>
       </div>
     </div>
-  )
+  );
 }
 
 export function ChatWindow({ messages, loading, onSend }: Props) {
-  const [draft, setDraft] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [draft, setDraft] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   function handleSubmit() {
-    const text = draft.trim()
-    if (!text || loading) return
-    setDraft('')
-    onSend(text)
+    const text = draft.trim();
+    if (!text || loading) return;
+    setDraft("");
+    onSend(text);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit()
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   }
 
@@ -94,10 +97,13 @@ export function ChatWindow({ messages, loading, onSend }: Props) {
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
             aria-label="Send message"
           >
-            <i className="fa-solid fa-paper-plane text-sm sm:text-base" aria-hidden />
+            <i
+              className="fa-solid fa-paper-plane text-sm sm:text-base"
+              aria-hidden
+            />
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
