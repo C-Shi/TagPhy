@@ -74,9 +74,13 @@ export function TagPicturesPage() {
             <RelationList title="Children" items={tag.children} />
           </div>
 
-          <section className="mt-8 rounded-md border border-dashed border-line bg-surface px-4 py-8 text-center">
+          <section className="mt-8">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+              Photos
+            </h2>
             <Preview
-              pictures={tag.pictures || []}
+              variant="tag"
+              pictures={tag.pictures ?? []}
               page={1}
               onPageChange={() => {}}
             />

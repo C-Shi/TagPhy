@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchPictureDetail } from "../api/client";
 import type { PictureDetail } from "../api/types";
+import { BackNav } from "../components/BackNav";
 
 export function PicturePage() {
   const { pictureId } = useParams();
@@ -47,13 +48,7 @@ export function PicturePage() {
   return (
     <div className="w-full px-4 py-6 library:px-8">
       <div className="mx-auto w-full max-w-3xl animate-fade-up">
-        <Link
-          to="/library"
-          className="inline-flex items-center gap-1.5 text-base font-medium text-ink-muted transition-colors hover:text-accent"
-        >
-          <span aria-hidden>←</span>
-          Library
-        </Link>
+        <BackNav />
 
         <article className="mt-5 overflow-hidden rounded-xl border border-line/80 bg-surface shadow-[0_1px_2px_rgba(42,31,26,0.04),0_12px_28px_-12px_rgba(42,31,26,0.18)]">
           {/* Print stage — dark mat so letterboxing feels intentional */}
@@ -172,12 +167,9 @@ function ErrorView({ message }: { message: string }) {
           </span>
           <div className="mt-1 font-mono text-base text-ink-muted">{message}</div>
         </div>
-        <Link
-          to="/library"
+        <BackNav
           className="mt-6 inline-flex items-center rounded bg-accent px-3 py-1.5 text-lg font-medium text-on-accent hover:brightness-110"
-        >
-          ← Library
-        </Link>
+        />
       </div>
     </div>
   );
