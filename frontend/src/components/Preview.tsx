@@ -1,14 +1,14 @@
-import type { Picture } from '../api/types'
-import { PreviewItem } from './PreviewItem'
+import type { Picture } from "../api/types";
+import { PreviewItem } from "./PreviewItem";
 
-const DEFAULT_PAGE_SIZE = 25
+const DEFAULT_PAGE_SIZE = 25;
 
 type Props = {
-  pictures: Picture[]
-  page: number
-  onPageChange: (page: number) => void
-  pageSize?: number
-}
+  pictures: Picture[];
+  page: number;
+  onPageChange: (page: number) => void;
+  pageSize?: number;
+};
 
 export function Preview({
   pictures,
@@ -16,13 +16,12 @@ export function Preview({
   onPageChange,
   pageSize = DEFAULT_PAGE_SIZE,
 }: Props) {
-  const hasPrev = page > 1
-  const hasNext = pictures.length >= pageSize
+  const hasPrev = page > 1;
+  const hasNext = pictures.length >= pageSize;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-canvas/40">
       <div className="min-h-0 flex-1 overflow-auto px-4 py-4 library:px-6">
-        <h2 className="text-lg font-semibold text-ink">Preview</h2>
         {pictures.length === 0 ? (
           <div className="mt-6 flex flex-col items-center justify-center rounded-md border border-dashed border-line bg-surface px-4 py-12 text-center">
             <p className="text-base font-semibold text-ink">No photos</p>
@@ -46,16 +45,19 @@ export function Preview({
             disabled={!hasPrev}
             onClick={() => onPageChange(page - 1)}
             className={[
-              'rounded px-3 py-1.5 text-sm font-semibold transition-colors',
+              "rounded px-3 py-1.5 text-sm font-semibold transition-colors",
               hasPrev
-                ? 'bg-surface text-ink ring-1 ring-line hover:bg-accent-soft'
-                : 'cursor-not-allowed bg-surface/60 text-ink-muted opacity-50',
-            ].join(' ')}
+                ? "bg-surface text-ink ring-1 ring-line hover:bg-accent-soft"
+                : "cursor-not-allowed bg-surface/60 text-ink-muted opacity-50",
+            ].join(" ")}
           >
             Previous
           </button>
 
-          <span className="text-sm font-medium text-ink-muted" aria-live="polite">
+          <span
+            className="text-sm font-medium text-ink-muted"
+            aria-live="polite"
+          >
             Page {page}
           </span>
 
@@ -64,16 +66,16 @@ export function Preview({
             disabled={!hasNext}
             onClick={() => onPageChange(page + 1)}
             className={[
-              'rounded px-3 py-1.5 text-sm font-semibold transition-colors',
+              "rounded px-3 py-1.5 text-sm font-semibold transition-colors",
               hasNext
-                ? 'bg-accent text-on-accent hover:brightness-110'
-                : 'cursor-not-allowed bg-surface/60 text-ink-muted opacity-50',
-            ].join(' ')}
+                ? "bg-accent text-on-accent hover:brightness-110"
+                : "cursor-not-allowed bg-surface/60 text-ink-muted opacity-50",
+            ].join(" ")}
           >
             Next
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

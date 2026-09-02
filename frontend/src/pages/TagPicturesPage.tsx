@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchTagPictures } from "../api/client";
 import type { TagPictureResponse } from "../api/types";
+import { Preview } from "../components/Preview";
 
 export function TagPicturesPage() {
   const { tagId } = useParams();
@@ -74,8 +75,11 @@ export function TagPicturesPage() {
           </div>
 
           <section className="mt-8 rounded-md border border-dashed border-line bg-surface px-4 py-8 text-center">
-            <p className="text-base font-medium text-ink">Photo gallery</p>
-            <p className="mt-1 text-base text-ink-muted">Coming soon</p>
+            <Preview
+              pictures={tag.pictures || []}
+              page={1}
+              onPageChange={() => {}}
+            />
           </section>
         </>
       )}
