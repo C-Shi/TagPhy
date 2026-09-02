@@ -169,9 +169,9 @@ Implement in order **A → B → C → D**. A and B are catalog UX (non-agent). 
 
 **Acceptance:**
 
-- [ ] Open tag from Library tag name link → gallery shows all photos tagged with that tag **or any descendant tag**.
-- [ ] Empty tag shows empty state (not “Coming soon”).
-- [ ] Click thumbnail → picture detail (Story A).
+- [x] Open tag from Library tag name link → gallery shows all photos tagged with that tag **or any descendant tag**.
+- [x] Empty tag shows empty state (not “Coming soon”).
+- [x] Click thumbnail → picture detail (Story A).
 
 ---
 
