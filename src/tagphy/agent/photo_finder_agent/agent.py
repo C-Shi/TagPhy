@@ -30,6 +30,14 @@ def tool_update_search_context(
     tool_context.state["tags"] = tags
 
 
+def set_chat_title_context(tool_context: ToolContext, title: str) -> None:
+    """Update the chat title in session state.
+    Args:
+        title: The title of the chat. It should be a concise description of the photo search. If not clear, summarize the search query into a title.
+    """
+    tool_context.state["chat_title"] = title
+
+
 def system_prompt(context):
     return f"""
         You are a helpful assistant that finds potential photos based on a user's description of the photo.
@@ -44,6 +52,7 @@ def system_prompt(context):
             - get_all_tags: Get all tags from the database
             - tool_rank_photos: Rank photos based on a user's description of the photo
             - tool_update_search_context: Update the search query in session state. Call it with each turn
+            - set_chat_title_context: Update the chat title in session state. Only call it once when you have enough information to set a title.
 
         Response format (important for the UI):
         - Clarifying questions, declines, and greetings: reply in natural language only.
@@ -86,6 +95,7 @@ def create_photo_finder_agent(model: str) -> Agent:
             get_all_tags,
             tool_rank_photos,
             tool_update_search_context,
+            set_chat_title_context,
         ],
     )
 

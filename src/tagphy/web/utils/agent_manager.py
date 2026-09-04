@@ -1,61 +1,56 @@
-import time
 from google.adk import Agent, Runner
-from google.adk.sessions import InMemorySessionService
+from google.adk.sessions import DatabaseSessionService, Session
 from google.genai.types import Content, Part
 
 from tagphy.tools.agent.photo_finder_agent import extract_photo_finder_turn
+from tagphy import app_root
+
+db_url = f"sqlite+aiosqlite:///{app_root()}/agent.db"
 
 
 class AgentManager:
     def __init__(self, agent: Agent):
-        self.session_service = InMemorySessionService()
-        self._sessions = {}
+        self.session_service = DatabaseSessionService(db_url=db_url)
+        self._user_id = agent.name
         self._runner = Runner(
             agent=agent, app_name="tagphy", session_service=self.session_service
         )
 
-    def get_session(self, session_id: str):
-        return self._sessions[session_id].get("session")
+    @classmethod
+    async def list_all_sessions(cls) -> list[Session]:
+        session_service = DatabaseSessionService(db_url=db_url)
+        return await session_service.list_sessions(app_name="tagphy")
+
+    async def get_session(self, session_id: str):
+        return await self.session_service.get_session(
+            app_name="tagphy", user_id=self._user_id, session_id=session_id
+        )
 
     async def run(self, session_id: str, message: str):
-        session = self._sessions[session_id]
-        if (
-            session["last_request_time"]
-            and time.time() - session["last_request_time"] < 5
-        ):
-            raise ValueError("Too many requests in the last 5 seconds")
-        session["total_requests_count"] += 1
-        if session["total_requests_count"] > 30:
-            await self.delete_session(session_id)
-            raise ValueError(
-                "You have reached the maximum number of requests for this session. Session deleted. Please create a new session."
-            )
         events = []
         async for event in self._runner.run_async(
-            user_id="tagphy",
+            user_id=self._user_id,
             session_id=session_id,
             new_message=Content(role="user", parts=[Part.from_text(text=message)]),
         ):
             events.append(event)
-        session["last_request_time"] = time.time()
         return extract_photo_finder_turn(events)
 
     async def create_session(self):
         session = await self.session_service.create_session(
-            app_name="tagphy", user_id="tagphy"
+            app_name="tagphy", user_id=self._user_id
         )
-        self._sessions[session.id] = {
-            "session": session,
-            "total_requests_count": 0,
-            "last_request_time": None,
-        }
         return session
 
     async def delete_session(self, session_id: str):
-        session = self._sessions[session_id].get("session")
+        session = await self.get_session(session_id)
         await self.session_service.delete_session(
             app_name=session.app_name,
             user_id=session.user_id,
             session_id=session.id,
         )
-        self._sessions.pop(session_id, None)
+
+    async def list_agent_sessions(self):
+        return await self.session_service.list_sessions(
+            app_name="tagphy", user_id=self._user_id
+        )

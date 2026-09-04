@@ -8,7 +8,7 @@ photo_finder_agent = AgentFactory.create_agent(
     agent_type="photo_finder_agent", model="gemini-3.7-flash"
 )
 
-agent_manager = AgentManager(photo_finder_agent)
+photo_finder_agent_manager = AgentManager(photo_finder_agent)
 
 
 @router.post("/photo-finder")
@@ -23,15 +23,25 @@ async def photo_finder(
     ),
 ):
     if session_id is None:
-        session = await agent_manager.create_session()
+        session = await photo_finder_agent_manager.create_session()
     else:
         try:
-            session = agent_manager.get_session(session_id)
+            session = await photo_finder_agent_manager.get_session(session_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Session not found")
 
     try:
-        response = await agent_manager.run(session.id, message)
+        response = await photo_finder_agent_manager.run(session.id, message)
     except ValueError as e:
         raise HTTPException(status_code=429, detail=str(e))
     return {"response": response, "session": session.id}
+
+
+@router.get("/sessions")
+async def sessions():
+    return await AgentManager.list_all_sessions()
+
+
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: str):
+    return await photo_finder_agent_manager.get_session(session_id)
