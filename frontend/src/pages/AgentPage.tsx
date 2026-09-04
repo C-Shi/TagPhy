@@ -1,6 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  getAgentSession,
+  listAgentSessions,
   sendPhotoFinderMessage,
   truncateTitle,
   type AgentSession,
@@ -16,11 +18,16 @@ export function AgentPage() {
   const {
     sessions,
     localMessages,
+    listHydrated,
+    historyLoadedIds,
     setSessions,
     setLocalMessages,
+    setListHydrated,
+    markHistoryLoaded,
     updateSessionMessages,
   } = useAgentSession();
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const activeSession = useMemo(
     () => (sessionId ? sessions.find((s) => s.id === sessionId) : undefined),
@@ -28,6 +35,93 @@ export function AgentPage() {
   );
 
   const messages = activeSession?.messages ?? localMessages;
+
+  useEffect(() => {
+    if (listHydrated) return;
+
+    let cancelled = false;
+    ;(async () => {
+      try {
+        const remote = await listAgentSessions();
+        if (cancelled) return;
+        setSessions((prev) => {
+          const byId = new Map(remote.map((s) => [s.id, s]));
+          for (const local of prev) {
+            const remoteSession = byId.get(local.id);
+            if (!remoteSession || local.messages.length > 0) {
+              byId.set(local.id, local);
+            } else {
+              byId.set(local.id, {
+                ...remoteSession,
+                title: local.title || remoteSession.title,
+              });
+            }
+          }
+          return Array.from(byId.values()).sort(
+            (a, b) => b.createdAt - a.createdAt,
+          );
+        });
+      } catch {
+        // Sidebar stays empty / local-only until next reload.
+      } finally {
+        if (!cancelled) setListHydrated(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listHydrated, setListHydrated, setSessions]);
+
+  const sessionKnown = Boolean(
+    sessionId && sessions.some((s) => s.id === sessionId),
+  );
+  const historyLoaded = Boolean(
+    sessionId && historyLoadedIds.has(sessionId),
+  );
+
+  useEffect(() => {
+    if (!sessionId || !listHydrated || !sessionKnown || historyLoaded) return;
+    if (loading) return;
+
+    let cancelled = false;
+    setHistoryLoading(true);
+    ;(async () => {
+      try {
+        const hydrated = await getAgentSession(sessionId);
+        if (cancelled) return;
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  title: hydrated.title,
+                  messages: hydrated.messages,
+                  createdAt: hydrated.createdAt,
+                }
+              : s,
+          ),
+        );
+        markHistoryLoaded(sessionId);
+      } catch {
+        if (!cancelled) markHistoryLoaded(sessionId);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionId,
+    listHydrated,
+    sessionKnown,
+    historyLoaded,
+    loading,
+    setSessions,
+    markHistoryLoaded,
+  ]);
 
   const handleNewChat = useCallback(() => {
     setLocalMessages([]);
@@ -62,6 +156,7 @@ export function AgentPage() {
             createdAt: Date.now(),
           };
           setSessions((prev) => [...prev, newSession]);
+          markHistoryLoaded(data.session);
           setLocalMessages([]);
           navigate(`/agent/${data.session}`, { replace: true });
         } catch (err: unknown) {
@@ -97,6 +192,7 @@ export function AgentPage() {
 
         if (activeSession) {
           updateSessionMessages(sessionId, (prev) => [...prev, agentMessage]);
+          markHistoryLoaded(sessionId);
         } else if (pendingMessages) {
           const resumed: AgentSession = {
             id: data.session,
@@ -108,6 +204,7 @@ export function AgentPage() {
             if (prev.some((s) => s.id === data.session)) return prev;
             return [...prev, resumed];
           });
+          markHistoryLoaded(data.session);
           setLocalMessages([]);
         }
       } catch (err: unknown) {
@@ -131,6 +228,7 @@ export function AgentPage() {
       setSessions,
       setLocalMessages,
       updateSessionMessages,
+      markHistoryLoaded,
     ],
   );
 
@@ -142,7 +240,11 @@ export function AgentPage() {
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
       />
-      <ChatWindow messages={messages} loading={loading} onSend={handleSend} />
+      <ChatWindow
+        messages={messages}
+        loading={loading || historyLoading}
+        onSend={handleSend}
+      />
     </div>
   );
 }

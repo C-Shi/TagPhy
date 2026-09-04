@@ -44,4 +44,5 @@ async def sessions():
 
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
+    # @TODO: Only one agent at a time is supported for now. This is allowed. Will refactor later when multi agent kick in.
     return await photo_finder_agent_manager.get_session(session_id)
