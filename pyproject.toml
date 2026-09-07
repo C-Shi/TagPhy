@@ -27,7 +27,7 @@ dependencies = [
 tagphy = "tagphy.main:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-cov"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

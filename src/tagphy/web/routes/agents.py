@@ -45,7 +45,12 @@ async def sessions():
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     # @TODO: Only one agent at a time is supported for now. This is allowed. Will refactor later when multi agent kick in.
-    return await photo_finder_agent_manager.get_session(session_id)
+    try:
+        return await photo_finder_agent_manager.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/sessions/{session_id}")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -13,6 +13,8 @@ from tagphy.web.routes import tags as tag_api
 from tagphy.web.routes import pictures as picture_api
 from tagphy.web.routes import scan as scan_api
 from tagphy.web.routes import settings as settings_api
+from tagphy.web.routes import agents as agent_api
+from tagphy.web.utils.agent_manager import AgentManager
 
 
 def _run(coro):
@@ -137,3 +139,41 @@ class TestSettingsRoute:
             with pytest.raises(HTTPException) as exc_info:
                 _run(settings_api.update_setting("privacy_pre_check", {"value": ""}))
         assert exc_info.value.status_code == 400
+
+
+class TestAgentRoute:
+    def test_get_sessions_returns_list_of_sessions(self):
+        mock_helper = AsyncMock()
+        sample = [{"id": 1, "name": "Session 1"}, {"id": 2, "name": "Session 2"}]
+        mock_helper.list_all_sessions.return_value = sample
+        with patch.object(agent_api, "AgentManager", mock_helper):
+            result = _run(agent_api.AgentManager.list_all_sessions())
+        mock_helper.list_all_sessions.assert_called_once_with()
+        assert result == sample
+
+    def test_get_session_id_returns_session(self):
+        mock_helper = AsyncMock()
+        sample = {"id": 1, "name": "Session 1"}
+        mock_helper.get_session.return_value = sample
+        with patch.object(agent_api, "photo_finder_agent_manager", mock_helper):
+            result = _run(agent_api.get_session(1))
+        mock_helper.get_session.assert_called_once_with(1)
+        assert result == sample
+
+    def test_get_session__idnot_found_raises_http_404(self):
+        mock_helper = MagicMock()
+        mock_helper.get_session.side_effect = KeyError("Session not found")
+        with patch.object(agent_api, "photo_finder_agent_manager", mock_helper):
+            with pytest.raises(HTTPException) as exc_info:
+                _run(agent_api.get_session(1))
+        mock_helper.get_session.assert_called_once_with(1)
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Session not found"
+
+    def test_delete_session_deletes_session(self):
+        mock_helper = AsyncMock()
+        mock_helper.delete_session.return_value = None
+        with patch.object(agent_api, "photo_finder_agent_manager", mock_helper):
+            result = _run(agent_api.delete_session(1))
+        mock_helper.delete_session.assert_called_once_with(1)
+        assert result == {"detail": "Session deleted successfully"}
