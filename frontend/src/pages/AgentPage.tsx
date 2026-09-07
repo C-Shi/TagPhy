@@ -42,6 +42,9 @@ export function AgentPage() {
   const messages = activeSession?.messages ?? localMessages;
 
   useEffect(() => {
+    // @todo Optional: fold listHydrated / historyLoadedIds / load errors into an
+    // explicit idle → loading list → loading history → ready | error state
+    // machine if hydrate races get harder to reason about (project-planning Story C).
     if (listHydrated) return;
 
     let cancelled = false;

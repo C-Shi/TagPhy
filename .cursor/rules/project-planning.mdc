@@ -189,24 +189,33 @@ agent.db    → all agent-related storage (new file beside app on USB)
 - **Do not** merge ADK DDL into TagPhy SQL migrations — ADK creates its own tables via SQLAlchemy (`sessions`, `events`, `app_states`, `user_states`, `adk_internal_metadata`).
 - Optional **app-owned** tables in `agent.db` (same file, your migrations): e.g. `agent_conversations`, `agent_messages` for UI-friendly sidebar/history — if ADK `events` JSON is too heavy to render directly.
 
-**Backend:**
+**Backend (shipped baseline):**
 
-- Add dependency: `google-adk[db]` (SQLAlchemy + async SQLite driver).
-- Replace `InMemorySessionService` in `AgentManager` with `DatabaseSessionService(db_url="sqlite+aiosqlite:///…/agent.db")`.
-- Keep `AgentManager` rate limits / request cap in process memory or move to `agent.db` metadata — document choice.
-- **New API (for FE persistence):**
-  - `GET /api/agents/sessions` — list conversations (id, title, agent_type, updated_at).
-  - `GET /api/agents/sessions/{session_id}/messages` — ordered messages for chat replay.
-  - Existing `POST /api/agents/photo-finder` unchanged; ensure it appends to durable store when UI tables exist.
+- `google-adk[db]` + `DatabaseSessionService` → `agent.db`.
+- `GET /api/agents/sessions` — list (ADK payload; FE slims).
+- `GET /api/agents/sessions/{session_id}` — full ADK session **including `events`** (history source of truth for FE).
+- `DELETE /api/agents/sessions/{session_id}` — remove session.
+- `POST /api/agents/photo-finder` unchanged for turns.
 - Photo Finder **tools** still read **`tagphy.db`** (catalog) — only session/chat uses **`agent.db`**.
 
-**Frontend:**
+**Frontend (shipped baseline):**
 
-- Remove or slim `AgentSessionContext` in-memory session list; fetch sessions on Agent page mount.
-- On `/agent/:sessionId`, load messages from API; send still via `POST /api/agents/photo-finder`.
-- Refresh browser restores sidebar + history when backend session exists.
+- Keep `AgentSessionProvider`; hydrate list once per reload from `GET /sessions`.
+- On select / deep-link, load history from `GET /sessions/{id}` events; map → slim `ChatMessage[]` at the API boundary (components never store raw ADK).
+- After hydrate, append ongoing turns from `POST /photo-finder` into local state (no per-message refetch) until next full reload.
+- Delete: confirm modal → API → drop from provider; navigate away only if the deleted id is active.
 
-**Out of scope:** Mid-chat model switch, multi-agent routes, cross-device sync, storing full JPEGs in agent DB.
+**Design note — why no `/messages` yet:**
+
+ADK `GET /sessions/{id}` already returns prior events, so a second route that re-serves trimmed history would duplicate work. FE maps events → bubbles (mirrors `extract_photo_finder_turn`) and keeps the surface area small for Photo Finder–scale chats.
+
+**Follow-ups / revisit triggers (do not build until needed):**
+
+1. **Split `/messages` (or BE-normalized history DTO)** when any of: session JSON payload / turn count hurts load or render; multi-agent event shapes diverge; FE mapper and Python `extract_photo_finder_turn` drift. Until then, prefer reusing full session + FE slim.
+2. **Version the FE event→bubble contract** — keep a real `GET /sessions/{id}` fixture (or golden JSON) beside the mapper so ADK camelCase serializer changes fail loudly.
+3. **Hydration state machine** — optional cleanup: fold `listHydrated` / `historyLoadedIds` / load errors into an explicit idle → loading list → loading history → ready | error model when races get harder to reason about.
+
+**Out of scope:** Mid-chat model switch, multi-agent routes, cross-device sync, storing full JPEGs in agent DB, soft-delete / undo for chats.
 
 **Acceptance:**
 
@@ -293,5 +302,5 @@ Not Trello stories until you reopen them (agent-track items above are **in** sco
 
 **Stages One–Six (non-agent): complete for this cut.**  
 **Stage Seven — Photo Finder vertical slice: complete** (agent + API + FE chat harness).  
-**Next on board: Story A (picture detail) → Story B (tag gallery) → Story C (agent.db + persistent sessions) → Story D (preview pagination).**  
+**Next on board: Story D (preview pagination).** Stories A–C shipped (picture detail, tag gallery, persistent agent sessions).
 Then continue sequence step 5 (embeddings / Entity Onboarding prep).

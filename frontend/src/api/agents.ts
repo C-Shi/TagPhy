@@ -196,7 +196,18 @@ function extractPhotoFinderTurn(events: AdkEvent[]): AgentTurnResponse {
   return { kind: 'chat', message, results: null }
 }
 
-/** Map ordered ADK events → slim ChatMessage[] for the FE store. */
+/**
+ * Map ordered ADK events → slim ChatMessage[] for the FE store.
+ *
+ * @todo Contract: treat this mapper as versioned against real GET /sessions/{id}
+ *   JSON (golden fixture). ADK wire fields are camelCase; state keys stay
+ *   snake_case — serializer changes should fail a fixture test, not silently
+ *   empty the chat.
+ * @todo Revisit BE GET /sessions/{id}/messages (or a normalized history DTO)
+ *   when session payload / turn count hurts load·render, multi-agent event
+ *   shapes diverge, or this drifts from Python extract_photo_finder_turn.
+ *   Until then, prefer full session + FE slim (see project-planning Story C).
+ */
 export function eventsToChatMessages(events: AdkEvent[]): ChatMessage[] {
   const messages: ChatMessage[] = []
   let i = 0
