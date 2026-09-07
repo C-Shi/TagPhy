@@ -59,7 +59,7 @@ type AdkEvent = {
   partial?: boolean | null
   longRunningToolIds?: string[] | null
   content?: { role?: string; parts?: AdkContentPart[] } | null
-  actions?: { skipSummarization?: boolean | null; [key: string]: unknown }
+  actions?: { skipSummarization?: boolean | null;[key: string]: unknown }
 }
 
 type AdkSession = {
@@ -280,4 +280,12 @@ export async function getAgentSession(
   if (!res.ok) await parseAgentError(res)
   const raw = (await res.json()) as AdkSession
   return toAgentSessionWithHistory(raw)
+}
+
+/** DELETE /api/agents/sessions/{id} → void. */
+export async function deleteAgentSession(sessionId: string): Promise<void> {
+  const res = await fetch(`/api/agents/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) await parseAgentError(res)
 }

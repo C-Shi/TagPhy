@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   getAgentSession,
+  deleteAgentSession,
   listAgentSessions,
   sendPhotoFinderMessage,
   truncateTitle,
   type AgentSession,
   type ChatMessage,
 } from "../api/agents";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { useAgentSession } from "../components/agent/AgentSessionContext";
 import { ChatWindow } from "../components/agent/ChatWindow";
 import { SessionList } from "../components/agent/SessionList";
@@ -21,6 +23,7 @@ export function AgentPage() {
     listHydrated,
     historyLoadedIds,
     setSessions,
+    deleteSession,
     setLocalMessages,
     setListHydrated,
     markHistoryLoaded,
@@ -28,6 +31,8 @@ export function AgentPage() {
   } = useAgentSession();
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const activeSession = useMemo(
     () => (sessionId ? sessions.find((s) => s.id === sessionId) : undefined),
@@ -40,7 +45,7 @@ export function AgentPage() {
     if (listHydrated) return;
 
     let cancelled = false;
-    ;(async () => {
+    (async () => {
       try {
         const remote = await listAgentSessions();
         if (cancelled) return;
@@ -76,9 +81,7 @@ export function AgentPage() {
   const sessionKnown = Boolean(
     sessionId && sessions.some((s) => s.id === sessionId),
   );
-  const historyLoaded = Boolean(
-    sessionId && historyLoadedIds.has(sessionId),
-  );
+  const historyLoaded = Boolean(sessionId && historyLoadedIds.has(sessionId));
 
   useEffect(() => {
     if (!sessionId || !listHydrated || !sessionKnown || historyLoaded) return;
@@ -86,7 +89,7 @@ export function AgentPage() {
 
     let cancelled = false;
     setHistoryLoading(true);
-    ;(async () => {
+    (async () => {
       try {
         const hydrated = await getAgentSession(sessionId);
         if (cancelled) return;
@@ -135,6 +138,33 @@ export function AgentPage() {
     },
     [navigate, setLocalMessages],
   );
+
+  const requestDeleteSession = useCallback((id: string) => {
+    setDeleteError(null);
+    setPendingDeleteId(id);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
+    setDeleteError(null);
+    try {
+      await deleteAgentSession(id);
+      deleteSession(id);
+      if (id === sessionId) {
+        navigate("/agent");
+      }
+    } catch (err: unknown) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete session",
+      );
+    }
+  }, [pendingDeleteId, navigate, deleteSession, sessionId]);
+
+  const handleCancelDelete = useCallback(() => {
+    setPendingDeleteId(null);
+  }, []);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -237,14 +267,26 @@ export function AgentPage() {
       <SessionList
         sessions={sessions}
         activeSessionId={sessionId}
+        deleteError={deleteError}
+        onDismissDeleteError={() => setDeleteError(null)}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
+        onDeleteSession={requestDeleteSession}
       />
       <ChatWindow
         messages={messages}
         loading={loading || historyLoading}
         onSend={handleSend}
       />
+      {pendingDeleteId && (
+        <ConfirmModal
+          title="Delete chat"
+          message="Delete chat will clear all the chat history"
+          confirmLabel="Delete"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   );
 }

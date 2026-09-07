@@ -210,10 +210,10 @@ agent.db    → all agent-related storage (new file beside app on USB)
 
 **Acceptance:**
 
-- [ ] Restart FastAPI — prior agent session can still receive messages with same `session_id` (ADK layer).
-- [ ] Refresh browser — sidebar and chat history restored from API (app layer).
-- [ ] `tagphy.db` tables unchanged; `agent.db` created automatically on first agent use.
-- [ ] Catalog scan/library unaffected.
+- [x] Restart FastAPI — prior agent session can still receive messages with same `session_id` (ADK layer).
+- [x] Refresh browser — sidebar and chat history restored from API (app layer).
+- [x] `tagphy.db` tables unchanged; `agent.db` created automatically on first agent use.
+- [x] Catalog scan/library unaffected.
 
 **Dependencies:** Stories A–B independent of C. C can ship without picture detail links from agent thumbnails.
 

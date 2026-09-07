@@ -14,6 +14,7 @@ type AgentSessionContextValue = {
   listHydrated: boolean;
   historyLoadedIds: ReadonlySet<string>;
   setSessions: React.Dispatch<React.SetStateAction<AgentSession[]>>;
+  deleteSession: (id: string) => void;
   setLocalMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   setListHydrated: React.Dispatch<React.SetStateAction<boolean>>;
   markHistoryLoaded: (id: string) => void;
@@ -44,6 +45,10 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const deleteSession = useCallback((id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
   const updateSessionMessages = useCallback(
     (id: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
       setSessions((prev) =>
@@ -62,6 +67,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       listHydrated,
       historyLoadedIds,
       setSessions,
+      deleteSession,
       setLocalMessages,
       setListHydrated,
       markHistoryLoaded,
